@@ -11,7 +11,15 @@
 	border: solid;
 	border-width: 1px;
 	border-radius: 3px;
-}	
+	max-width: 40%;
+}
+canvas{
+	max-width: 100%;
+}
+body{
+	background: rgb(200,200,200);
+	padding: 20px;
+}
 		</style>
 	</head>
 	<body>
@@ -30,7 +38,10 @@
 		<h3>Encode</h3>
 		<input type="file" id="imageInput"><br>
 		<h4>Parameters:</h4>
-		Quantizer <input id="quantizer" value="0"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.1<br>
+		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.1<br>
+		Max block size: <input id="maxBlockSize" value="128" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
+		Grouping constant: <input id="groupingConstant" value="8" type="number" min="0" step="1" max="255"> 8 is good for basically everything. A few % can sometimes be saved by tweaking it<br>
+		Brute-force gradients: <input id="bruteForce" type="checkbox" checked><br>
 		<button id="encodeButton">encode again</button>
 		<h4>Stats:</h4>
 		<p id="encodeStats"></p>
@@ -136,12 +147,12 @@ let html_encode = function(){
 					imageData.push(col)
 				}
 				saveByteArray([encodeHoh(imageData,{
-					quantizer: parseFloat(document.getElementById("quantizer").value || 0),
-					forceGradients: true,
+					quantizer: parseFloat(document.getElementById("quantizer").value) || 0,
+					forceGradients: document.getElementById("bruteForce").checked,
 					lossySmallGradients: true,
 					forceGradientsExtra: true,
-					groupingConstant: 8,
-					maxBlockSize: 128
+					groupingConstant: parseInt(document.getElementById("groupingConstant").value) || 0,
+					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0
 				})], fileName + ".hoh");
 			});
 			img.src = e.target.result;

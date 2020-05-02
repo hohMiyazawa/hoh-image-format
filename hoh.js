@@ -840,9 +840,7 @@ function encodeHoh(imageData,options){
 	if(hohStatsHandler){
 		hohStatsHandler(stats)
 	}
-	else{
-		console.log(stats)
-	}
+	console.log(stats)
 	
 	return Uint8Array.from(hohData) 
 }
