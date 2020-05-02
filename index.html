@@ -40,6 +40,7 @@ body{
 		<input type="file" id="imageInput"><br>
 		<h4>Parameters:</h4>
 		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.1<br>
+		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
 		Max block size: <input id="maxBlockSize" value="128" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
 		Grouping constant: <input id="groupingConstant" value="8" type="number" min="0" step="1" max="255"> 8 is good for basically everything. A few % can sometimes be saved by tweaking it<br>
 		Brute-force gradients: <input id="bruteForce" type="checkbox" checked><br>
@@ -86,20 +87,30 @@ function readFileAsArrayBuffer(file, success, error) {
 
 function drawToCanvas(imageData){
 	let canvas = document.getElementById("render");
-	canvas.width = imageData.length;
-	canvas.height = imageData[0].length || 0;
+	canvas.width = imageData.luma.length;
+	canvas.height = imageData.luma[0].length || 0;
 	let ctx = canvas.getContext("2d");
-	imageData.forEach((row,i) => {
-		row.forEach((cel,j) => {
-			ctx.fillStyle = "rgb(" + cel + "," + cel + "," + cel +")";
-			ctx.fillRect(i,j,1,1)
+	if(imageData.Cb.length === 0){
+		imageData.luma.forEach((row,i) => {
+			row.forEach((cel,j) => {
+				ctx.fillStyle = "rgb(" + cel + "," + cel + "," + cel +")";
+				ctx.fillRect(i,j,1,1)
+			})
 		})
-	})
+	}
+	else{
+		imageData.luma.forEach((col,i) => {
+			col.forEach((cel,j) => {
+				ctx.fillStyle = "rgb(" + Math.round(cel + 1.402 * (imageData.Cr[i][j] - 128)) + "," + Math.round(cel - 0.344136 * (imageData.Cb[i][j] - 128) - 0.714136 * (imageData.Cr[i][j] - 128)) + "," + Math.round(cel + 1.772 * (imageData.Cb[i][j] - 128)) +")";
+				ctx.fillRect(i,j,1,1)
+			})
+		})
+	}
 }
 
 function hohStatsHandler(data){
 	document.getElementById("encodeStats").innerText = `
-compression: ${Math.round((1 - (data.size / (data.width * data.height)))*10000)/100 + "%"}
+compression: ${Math.round((1 - (data.size / (data.width * data.height * 3)))*10000)/100 + "%"}
 time: ${data.time + "ms"}
 blocks used:
 - ${data.whole} | solid colour
@@ -117,6 +128,11 @@ delta coding: (high numbers for 5,6 and 7 is good)
 - 7-bit: ${data.chunking.one}
 - 6-bit: ${data.chunking.two}
 - 5-bit: ${data.chunking.three}
+
+size: ${data.lumaSize + data.colourSize + 7} bytes
+- header: 8
+- luma: ${data.lumaSize}
+- chroma: ${data.colourSize}
 `
 }
 
@@ -163,14 +179,41 @@ let html_encode = function(){
 					};
 					imageData.push(col)
 				}
+				let CBdata = [];
+				for(let i=0;i<img.width;i++){
+					let col = [];
+					for(let j=0;j<img.height;j++){
+						col.push(Math.round(
+							128 
+							- contextData[i * 4 + j * img.width * 4] * 0.168736
+							- contextData[i * 4 + j * img.width * 4 + 1] * 0.331264
+							+ contextData[i * 4 + j * img.width * 4 + 2] * 0.5
+						))
+					};
+					CBdata.push(col)
+				}
+				let CRdata = [];
+				for(let i=0;i<img.width;i++){
+					let col = [];
+					for(let j=0;j<img.height;j++){
+						col.push(Math.round(
+							128 
+							+ contextData[i * 4 + j * img.width * 4] * 0.5
+							- contextData[i * 4 + j * img.width * 4 + 1] * 0.418688
+							- contextData[i * 4 + j * img.width * 4 + 2] * 0.081312
+						))
+					};
+					CRdata.push(col)
+				}
 				saveByteArray([encodeHoh(imageData,{
 					quantizer: parseFloat(document.getElementById("quantizer").value) || 0,
 					forceGradients: document.getElementById("bruteForce").checked,
 					lossySmallGradients: true,
 					forceGradientsExtra: true,
+					subSampling: parseFloat(document.getElementById("colourQuantizer").value) || 0,
 					groupingConstant: parseInt(document.getElementById("groupingConstant").value) || 0,
 					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0
-				})], fileName + ".hoh");
+				},CBdata,CRdata)], fileName + ".hoh");
 			});
 			img.src = e.target.result;
 		};       

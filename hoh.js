@@ -67,7 +67,7 @@ function create_diagonal_gradient(colour1,colour2,direction,size){
 	return data
 }
 
-function encodeHoh(imageData,options){
+function encodeHoh(imageData,options,CBdata,CRdata){
 	let t0 = performance.now();
 	let stats = {
 		whole: 0,
@@ -360,8 +360,6 @@ function encodeHoh(imageData,options){
 		return Math.round(sum/(chunck.length * chunck[0].length))
 	}
 
-	let blockQueue = [{x: 0,y:0, size: encoding_size}];
-
 	if(options.quantizer === 0){
 		options.forceGradients = false//useless in lossless mode
 	}
@@ -369,32 +367,436 @@ function encodeHoh(imageData,options){
 		options.maxBlockSize = 128
 	}
 
-	while(blockQueue.length){
-		let curr = blockQueue.pop();
-		if(
-			curr.x >= width
-			|| curr.y >= height
-		){
-			continue
-		}
-		if(curr.size === 1){
-			writeByte(imageData[curr.x][curr.y]);
-			stats.single++;
-			continue
-		}
-		if(
-			(
-				options.maxBlockSize && curr.size > options.maxBlockSize
-			)
-			|| (
-				options.quantizer === 0
-				&& curr.size > 2
-				&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y]
-				&& imageData[curr.x][curr.y] !== imageData[curr.x][curr.y + 1]
-				&& imageData[curr.x][curr.y + 1] !== imageData[curr.x + 1][curr.y]
-				&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y + 1]
-			)
-		){
+	let encode_channel = function(){
+		let blockQueue = [{x: 0,y:0, size: encoding_size}];
+		while(blockQueue.length){
+			let curr = blockQueue.pop();
+			if(
+				curr.x >= width
+				|| curr.y >= height
+			){
+				continue
+			}
+			if(curr.size === 1){
+				writeByte(imageData[curr.x][curr.y]);
+				stats.single++;
+				continue
+			}
+			if(
+				(
+					options.maxBlockSize && curr.size > options.maxBlockSize
+				)
+				|| (
+					options.quantizer === 0
+					&& curr.size > 2
+					&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y]
+					&& imageData[curr.x][curr.y] !== imageData[curr.x][curr.y + 1]
+					&& imageData[curr.x][curr.y + 1] !== imageData[curr.x + 1][curr.y]
+					&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y + 1]
+				)
+			){
+				writeBit(0);writeBit(0);
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				});
+				continue
+			}
+			let chunck = get_chunck(curr.x,curr.y,curr.size);
+			let average = find_average(chunck);
+			let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
+			let localQuantizer = options.quantizer * (1 - Math.sqrt(curr.size/encoding_size));
+			if(avg_error <= localQuantizer){
+				let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
+				let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+				let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
+				let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+				if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
+					writeBit(0);writeBit(1);
+					writeByte(average);
+					stats.whole++;
+					continue
+				}
+			}
+			if(curr.size >=4){
+				let mArr;
+				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
+					mArr = [
+						chunck[0][0],
+						chunck[0][0],
+						chunck[curr.size - 1][0],
+						chunck[curr.size - 1][0],
+
+						chunck[0][0],
+						chunck[0][0],
+						chunck[curr.size - 1][0],
+						chunck[curr.size - 1][0],
+
+						chunck[0][curr.size - 1],
+						chunck[0][curr.size - 1],
+						chunck[curr.size - 1][curr.size - 1],
+						chunck[curr.size - 1][curr.size - 1],
+
+						chunck[0][curr.size - 1],
+						chunck[0][curr.size - 1],
+						chunck[curr.size - 1][curr.size - 1],
+						chunck[curr.size - 1][curr.size - 1]
+					]
+				}
+				else{
+					mArr = [
+						find_average(get_chunck(curr.x,curr.y,curr.size/4)),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y,curr.size/4)),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y,curr.size/4)),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y,curr.size/4)),
+
+						find_average(get_chunck(curr.x,curr.y + curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + curr.size/4,curr.size/4)),
+
+						find_average(get_chunck(curr.x,curr.y + 2*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
+
+						find_average(get_chunck(curr.x,curr.y + 3*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4))
+					]
+				}
+				let top = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
+				let bottom = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
+				let vertical_error = error_compare(chunck,create_vertical_gradient(top,bottom,curr.size),curr.x,curr.y);
+				let left = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
+				let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
+				let horizontal_error = error_compare(chunck,create_horizontal_gradient(left,right,curr.size),curr.x,curr.y);
+
+				let diagonal1_error = error_compare(chunck,create_diagonal_gradient(mArr[0],mArr[15],false,curr.size),curr.x,curr.y);
+				let diagonal2_error = error_compare(chunck,create_diagonal_gradient(mArr[3],mArr[12],true,curr.size),curr.x,curr.y);
+				let orto_error = Math.min(horizontal_error,vertical_error);
+				let dia_error = Math.min(diagonal1_error,diagonal2_error);
+				if(orto_error < dia_error){
+					if(vertical_error < horizontal_error){
+						if(options.forceGradients){
+							let newTop = Math.min(top + 1,255);
+							let diff = 1;
+							if(top < bottom){
+								newTop = Math.max(top - 1,0);
+								diff = -1
+							}
+							let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+							while(new_vertical_error < vertical_error){
+								stats.vertical_improvements++;
+								top = newTop;
+								vertical_error = new_vertical_error;
+								newTop = Math.min(255,Math.max(newTop + diff,0));
+								new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+							}
+							let newBottom = Math.min(bottom + 1,255);
+							if(diff){
+								newBottom = Math.max(bottom - 1,0);
+							}
+							new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+							while(new_vertical_error < vertical_error){
+								stats.vertical_improvements++;
+								bottom = newBottom;
+								vertical_error = new_vertical_error;
+								newBottom = Math.min(255,Math.max(newBottom - diff,0));
+								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+							}
+							if(options.forceGradientsExtra){
+								diff = -diff;
+								newTop = Math.min(255,Math.max(newTop + diff,0));
+								new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+								while(new_vertical_error < vertical_error){
+									stats.unlikely_improvements++;
+									top = newTop;
+									vertical_error = new_vertical_error;
+									newTop = Math.min(255,Math.max(newTop + diff,0));
+									new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+								}
+								newBottom =  Math.min(255,Math.max(newBottom - diff,0));
+								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+								while(new_vertical_error < vertical_error){
+									stats.unlikely_improvements++;
+									bottom = newBottom;
+									vertical_error = new_vertical_error;
+									newBottom = Math.min(255,Math.max(newBottom - diff,0));
+									new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+								}
+							}
+						}
+						if(vertical_error <= localQuantizer){
+							writeBit(1);writeBit(0);
+							writeBit(0);
+							writeByte(top);
+							writeByte(bottom);
+							stats.vertical++;
+							continue
+						}
+					}
+					else{
+						if(options.forceGradients){
+							let newLeft = Math.min(left + 1,255);
+							let diff = 1;
+							if(left < right){
+								newLeft = Math.max(left - 1,0);
+								diff = -1
+							}
+							let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+							while(new_horizontal_error < horizontal_error){
+								stats.horizontal_improvements++;
+								left = newLeft;
+								horizontal_error = new_horizontal_error;
+								newLeft = Math.min(255,Math.max(newLeft + diff,0));
+								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+							}
+							let newRight = Math.min(right + 1,255);
+							if(diff){
+								newRight = Math.max(right - 1,0);
+							}
+							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+							while(new_horizontal_error < horizontal_error){
+								stats.horizontal_improvements++;
+								right = newRight;
+								horizontal_error = new_horizontal_error;
+								newRight = Math.min(255,Math.max(newRight - diff,0));
+								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+							}
+							if(options.forceGradientsExtra){
+								diff = -diff;
+								newLeft = Math.min(255,Math.max(newLeft + diff,0));
+								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+								while(new_horizontal_error < horizontal_error){
+									stats.unlikely_improvements++;
+									left = newLeft;
+									horizontal_error = new_horizontal_error;
+									newLeft = Math.min(255,Math.max(newLeft + diff,0));
+									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+								}
+								newRight = Math.min(255,Math.max(newRight - diff,0));
+								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+								while(new_horizontal_error < horizontal_error){
+									stats.unlikely_improvements++;
+									right = newRight;
+									horizontal_error = new_horizontal_error;
+									newRight = Math.min(255,Math.max(newRight - diff,0));
+									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+								}
+							}
+						}
+						if(horizontal_error <= localQuantizer){
+							writeBit(1);writeBit(0);
+							writeBit(1);
+							writeByte(left);
+							writeByte(right);
+							stats.horizontal++;
+							continue
+						}
+					}
+				}
+				else{
+					if(diagonal1_error < diagonal2_error){
+						let NW = mArr[0];
+						let SE = mArr[15];
+						if(options.forceGradients){
+							let newNW = Math.min(NW + 1,255);
+							let diff = 1;
+							if(NW < SE){
+								newNW = Math.max(NW - 1,0);
+								diff = -1
+							}
+							let new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y);
+							while(new_diagonal1_error < diagonal1_error){
+								stats.diagonal_improvements++;
+								NW = newNW;
+								diagonal1_error = new_diagonal1_error;
+								newNW = Math.min(255,Math.max(newNW + diff,0));
+								new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y)
+							}
+
+							let newSE = Math.min(SE + 1,255);
+							if(diff){
+								newSE = Math.max(SE - 1,0);
+							}
+							new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y);
+							while(new_diagonal1_error < diagonal1_error){
+								stats.diagonal_improvements++;
+								SE = newSE;
+								diagonal1_error = new_diagonal1_error;
+								newSE = Math.min(255,Math.max(newSE - diff,0));
+								new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y)
+							}
+						}
+						if(diagonal1_error <= localQuantizer){
+							writeBit(1);writeBit(1);
+							writeBit(0);
+							writeByte(NW);
+							writeByte(SE);
+							stats.diagonal++;
+							continue
+						}
+					}
+					else{
+						let NE = mArr[3];
+						let SW = mArr[12];
+						if(options.forceGradients){
+							let newNE = Math.min(NE + 1,255);
+							let diff = 1;
+							if(NE < SW){
+								newNE = Math.max(NE - 1,0);
+								diff = -1
+							}
+							let new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y);
+							while(new_diagonal2_error < diagonal2_error){
+								stats.diagonal_improvements++;
+								NE = newNE;
+								diagonal2_error = new_diagonal2_error;
+								newNE = Math.min(255,Math.max(newNE + diff,0));
+								new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y)
+							}
+
+							let newSW = Math.min(SW + 1,255);
+							if(diff){
+								newSW = Math.max(SW - 1,0);
+							}
+							new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y);
+							while(new_diagonal2_error < diagonal2_error){
+								stats.diagonal_improvements++;
+								SW = newSW;
+								diagonal2_error = new_diagonal2_error;
+								newSW = Math.min(255,Math.max(newSW - diff,0));
+								new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y)
+							}
+						}
+						if(diagonal2_error <= localQuantizer){
+							writeBit(1);writeBit(1);
+							writeBit(1);
+							writeByte(NE);
+							writeByte(SW);
+							stats.diagonal++;
+							continue
+						}
+					}
+				}
+			}
+			if(curr.size === 2){
+				if(
+					chunck[0][0] === chunck[1][0]
+					&& chunck[0][1] === chunck[1][1]
+				){
+					writeBit(1);writeBit(0);
+					writeBit(0);
+					writeByte(chunck[0][0]);
+					writeByte(chunck[0][1]);
+					stats.small_gradients++;
+					continue
+				}
+				if(
+					chunck[0][0] === chunck[0][1]
+					&& chunck[1][0] === chunck[1][1]
+				){
+					writeBit(1);writeBit(0);
+					writeBit(1);
+					writeByte(chunck[0][0]);
+					writeByte(chunck[1][1]);
+					stats.small_gradients++;
+					continue
+				}
+				let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
+				if(dia1_err === 0){
+					writeBit(1);writeBit(1);
+					writeBit(0);
+					writeByte(chunck[0][0]);
+					writeByte(chunck[1][1]);
+					stats.small_diagonals++;
+					continue
+				}
+				let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
+				if(dia2_err === 0){
+					writeBit(1);writeBit(1);
+					writeBit(1);
+					writeByte(chunck[1][0]);
+					writeByte(chunck[0][1]);
+					stats.small_diagonals++;
+					continue
+				}
+				if(options.lossySmallGradients){
+					let upper_avg = Math.round((chunck[0][0] + chunck[1][0])/2);
+					let lower_avg = Math.round((chunck[0][1] + chunck[1][1])/2);
+					let left_avg = Math.round((chunck[0][0] + chunck[0][1])/2);
+					let right_avg = Math.round((chunck[1][0] + chunck[1][1])/2);
+					let lossyVerticalError = error_compare([[upper_avg,lower_avg],[upper_avg,lower_avg]],chunck,0,0);
+					let lossyHorizontalError = error_compare([[left_avg,left_avg],[right_avg,right_avg]],chunck,0,0);
+					if(Math.min(lossyVerticalError,lossyHorizontalError) < Math.min(dia1_err,dia2_err)){
+						if(lossyVerticalError < lossyHorizontalError){
+							if(lossyVerticalError <= options.quantizer){
+								writeBit(1);writeBit(0);
+								writeBit(0);
+								writeByte(upper_avg);
+								writeByte(lower_avg);
+								stats.lossy_small_gradients++;
+								continue
+							}
+						}
+						else{
+							if(lossyHorizontalError <= options.quantizer){
+								writeBit(1);writeBit(0);
+								writeBit(1);
+								writeByte(left_avg);
+								writeByte(right_avg);
+								stats.lossy_small_gradients++;
+								continue
+							}
+						}
+					}
+					else{
+						if(dia1_err < dia2_err){
+							if(dia1_err <= options.quantizer){
+								writeBit(1);writeBit(1);
+								writeBit(0);
+								writeByte(chunck[0][0]);
+								writeByte(chunck[1][1]);
+								stats.lossy_small_diagonals++;
+								continue
+							}
+						}
+						else{
+							if(dia2_err <= options.quantizer){
+								writeBit(1);writeBit(1);
+								writeBit(1);
+								writeByte(chunck[1][0]);
+								writeByte(chunck[0][1]);
+								stats.lossy_small_diagonals++;
+								continue
+							}
+						}
+					}
+				}
+			}
+			//subdivide
+			if(curr.size === 1){
+				console.log(avg_error)
+				throw "should never happen"
+			}
 			writeBit(0);writeBit(0);
 			blockQueue.push({
 				x: curr.x,
@@ -415,410 +817,21 @@ function encodeHoh(imageData,options){
 				x: curr.x + curr.size/2,
 				y: curr.y + curr.size/2,
 				size: curr.size/2
-			});
-			continue
+			})
 		}
-		let chunck = get_chunck(curr.x,curr.y,curr.size);
-		let average = find_average(chunck);
-		let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
-		let localQuantizer = options.quantizer * (1 - Math.sqrt(curr.size/encoding_size));
-		if(avg_error <= localQuantizer){
-			let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
-			let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-			let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
-			let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-			if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
-				writeBit(0);writeBit(1);
-				writeByte(average);
-				stats.whole++;
-				continue
-			}
-		}
-		if(curr.size >=4){
-			let mArr;
-			if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
-				mArr = [
-					chunck[0][0],
-					chunck[0][0],
-					chunck[curr.size - 1][0],
-					chunck[curr.size - 1][0],
-
-					chunck[0][0],
-					chunck[0][0],
-					chunck[curr.size - 1][0],
-					chunck[curr.size - 1][0],
-
-					chunck[0][curr.size - 1],
-					chunck[0][curr.size - 1],
-					chunck[curr.size - 1][curr.size - 1],
-					chunck[curr.size - 1][curr.size - 1],
-
-					chunck[0][curr.size - 1],
-					chunck[0][curr.size - 1],
-					chunck[curr.size - 1][curr.size - 1],
-					chunck[curr.size - 1][curr.size - 1]
-				]
-			}
-			else{
-				mArr = [
-					find_average(get_chunck(curr.x,curr.y,curr.size/4)),
-					find_average(get_chunck(curr.x + curr.size/4,curr.y,curr.size/4)),
-					find_average(get_chunck(curr.x + 2*curr.size/4,curr.y,curr.size/4)),
-					find_average(get_chunck(curr.x + 3*curr.size/4,curr.y,curr.size/4)),
-
-					find_average(get_chunck(curr.x,curr.y + curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + curr.size/4,curr.y + curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + curr.size/4,curr.size/4)),
-
-					find_average(get_chunck(curr.x,curr.y + 2*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-
-					find_average(get_chunck(curr.x,curr.y + 3*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-					find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4))
-				]
-			}
-			let top = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
-			let bottom = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
-			let vertical_error = error_compare(chunck,create_vertical_gradient(top,bottom,curr.size),curr.x,curr.y);
-			let left = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
-			let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
-			let horizontal_error = error_compare(chunck,create_horizontal_gradient(left,right,curr.size),curr.x,curr.y);
-
-			let diagonal1_error = error_compare(chunck,create_diagonal_gradient(mArr[0],mArr[15],false,curr.size),curr.x,curr.y);
-			let diagonal2_error = error_compare(chunck,create_diagonal_gradient(mArr[3],mArr[12],true,curr.size),curr.x,curr.y);
-			let orto_error = Math.min(horizontal_error,vertical_error);
-			let dia_error = Math.min(diagonal1_error,diagonal2_error);
-			if(orto_error < dia_error){
-				if(vertical_error < horizontal_error){
-					if(options.forceGradients){
-						let newTop = Math.min(top + 1,255);
-						let diff = 1;
-						if(top < bottom){
-							newTop = Math.max(top - 1,0);
-							diff = -1
-						}
-						let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-						while(new_vertical_error < vertical_error){
-							stats.vertical_improvements++;
-							top = newTop;
-							vertical_error = new_vertical_error;
-							newTop = Math.min(255,Math.max(newTop + diff,0));
-							new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-						}
-						let newBottom = Math.min(bottom + 1,255);
-						if(diff){
-							newBottom = Math.max(bottom - 1,0);
-						}
-						new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-						while(new_vertical_error < vertical_error){
-							stats.vertical_improvements++;
-							bottom = newBottom;
-							vertical_error = new_vertical_error;
-							newBottom = Math.min(255,Math.max(newBottom - diff,0));
-							new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-						}
-						if(options.forceGradientsExtra){
-							diff = -diff;
-							newTop = Math.min(255,Math.max(newTop + diff,0));
-							new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-							while(new_vertical_error < vertical_error){
-								stats.unlikely_improvements++;
-								top = newTop;
-								vertical_error = new_vertical_error;
-								newTop = Math.min(255,Math.max(newTop + diff,0));
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-							}
-							newBottom =  Math.min(255,Math.max(newBottom - diff,0));
-							new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-							while(new_vertical_error < vertical_error){
-								stats.unlikely_improvements++;
-								bottom = newBottom;
-								vertical_error = new_vertical_error;
-								newBottom = Math.min(255,Math.max(newBottom - diff,0));
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-							}
-						}
-					}
-					if(vertical_error <= localQuantizer){
-						writeBit(1);writeBit(0);
-						writeBit(0);
-						writeByte(top);
-						writeByte(bottom);
-						stats.vertical++;
-						continue
-					}
-				}
-				else{
-					if(options.forceGradients){
-						let newLeft = Math.min(left + 1,255);
-						let diff = 1;
-						if(left < right){
-							newLeft = Math.max(left - 1,0);
-							diff = -1
-						}
-						let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-						while(new_horizontal_error < horizontal_error){
-							stats.horizontal_improvements++;
-							left = newLeft;
-							horizontal_error = new_horizontal_error;
-							newLeft = Math.min(255,Math.max(newLeft + diff,0));
-							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-						}
-						let newRight = Math.min(right + 1,255);
-						if(diff){
-							newRight = Math.max(right - 1,0);
-						}
-						new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-						while(new_horizontal_error < horizontal_error){
-							stats.horizontal_improvements++;
-							right = newRight;
-							horizontal_error = new_horizontal_error;
-							newRight = Math.min(255,Math.max(newRight - diff,0));
-							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-						}
-						if(options.forceGradientsExtra){
-							diff = -diff;
-							newLeft = Math.min(255,Math.max(newLeft + diff,0));
-							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-							while(new_horizontal_error < horizontal_error){
-								stats.unlikely_improvements++;
-								left = newLeft;
-								horizontal_error = new_horizontal_error;
-								newLeft = Math.min(255,Math.max(newLeft + diff,0));
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-							}
-							newRight = Math.min(255,Math.max(newRight - diff,0));
-							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-							while(new_horizontal_error < horizontal_error){
-								stats.unlikely_improvements++;
-								right = newRight;
-								horizontal_error = new_horizontal_error;
-								newRight = Math.min(255,Math.max(newRight - diff,0));
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-							}
-						}
-					}
-					if(horizontal_error <= localQuantizer){
-						writeBit(1);writeBit(0);
-						writeBit(1);
-						writeByte(left);
-						writeByte(right);
-						stats.horizontal++;
-						continue
-					}
-				}
-			}
-			else{
-				if(diagonal1_error < diagonal2_error){
-					let NW = mArr[0];
-					let SE = mArr[15];
-					if(options.forceGradients){
-						let newNW = Math.min(NW + 1,255);
-						let diff = 1;
-						if(NW < SE){
-							newNW = Math.max(NW - 1,0);
-							diff = -1
-						}
-						let new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y);
-						while(new_diagonal1_error < diagonal1_error){
-							stats.diagonal_improvements++;
-							NW = newNW;
-							diagonal1_error = new_diagonal1_error;
-							newNW = Math.min(255,Math.max(newNW + diff,0));
-							new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y)
-						}
-
-						let newSE = Math.min(SE + 1,255);
-						if(diff){
-							newSE = Math.max(SE - 1,0);
-						}
-						new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y);
-						while(new_diagonal1_error < diagonal1_error){
-							stats.diagonal_improvements++;
-							SE = newSE;
-							diagonal1_error = new_diagonal1_error;
-							newSE = Math.min(255,Math.max(newSE - diff,0));
-							new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y)
-						}
-					}
-					if(diagonal1_error <= localQuantizer){
-						writeBit(1);writeBit(1);
-						writeBit(0);
-						writeByte(NW);
-						writeByte(SE);
-						stats.diagonal++;
-						continue
-					}
-				}
-				else{
-					let NE = mArr[3];
-					let SW = mArr[12];
-					if(options.forceGradients){
-						let newNE = Math.min(NE + 1,255);
-						let diff = 1;
-						if(NE < SW){
-							newNE = Math.max(NE - 1,0);
-							diff = -1
-						}
-						let new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y);
-						while(new_diagonal2_error < diagonal2_error){
-							stats.diagonal_improvements++;
-							NE = newNE;
-							diagonal2_error = new_diagonal2_error;
-							newNE = Math.min(255,Math.max(newNE + diff,0));
-							new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y)
-						}
-
-						let newSW = Math.min(SW + 1,255);
-						if(diff){
-							newSW = Math.max(SW - 1,0);
-						}
-						new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y);
-						while(new_diagonal2_error < diagonal2_error){
-							stats.diagonal_improvements++;
-							SW = newSW;
-							diagonal2_error = new_diagonal2_error;
-							newSW = Math.min(255,Math.max(newSW - diff,0));
-							new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y)
-						}
-					}
-					if(diagonal2_error <= localQuantizer){
-						writeBit(1);writeBit(1);
-						writeBit(1);
-						writeByte(NE);
-						writeByte(SW);
-						stats.diagonal++;
-						continue
-					}
-				}
-			}
-		}
-		if(curr.size === 2){
-			if(
-				chunck[0][0] === chunck[1][0]
-				&& chunck[0][1] === chunck[1][1]
-			){
-				writeBit(1);writeBit(0);
-				writeBit(0);
-				writeByte(chunck[0][0]);
-				writeByte(chunck[0][1]);
-				stats.small_gradients++;
-				continue
-			}
-			if(
-				chunck[0][0] === chunck[0][1]
-				&& chunck[1][0] === chunck[1][1]
-			){
-				writeBit(1);writeBit(0);
-				writeBit(1);
-				writeByte(chunck[0][0]);
-				writeByte(chunck[1][1]);
-				stats.small_gradients++;
-				continue
-			}
-			let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
-			if(dia1_err === 0){
-				writeBit(1);writeBit(1);
-				writeBit(0);
-				writeByte(chunck[0][0]);
-				writeByte(chunck[1][1]);
-				stats.small_diagonals++;
-				continue
-			}
-			let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
-			if(dia2_err === 0){
-				writeBit(1);writeBit(1);
-				writeBit(1);
-				writeByte(chunck[1][0]);
-				writeByte(chunck[0][1]);
-				stats.small_diagonals++;
-				continue
-			}
-			if(options.lossySmallGradients){
-				let upper_avg = Math.round((chunck[0][0] + chunck[1][0])/2);
-				let lower_avg = Math.round((chunck[0][1] + chunck[1][1])/2);
-				let left_avg = Math.round((chunck[0][0] + chunck[0][1])/2);
-				let right_avg = Math.round((chunck[1][0] + chunck[1][1])/2);
-				let lossyVerticalError = error_compare([[upper_avg,lower_avg],[upper_avg,lower_avg]],chunck,0,0);
-				let lossyHorizontalError = error_compare([[left_avg,left_avg],[right_avg,right_avg]],chunck,0,0);
-				if(Math.min(lossyVerticalError,lossyHorizontalError) < Math.min(dia1_err,dia2_err)){
-					if(lossyVerticalError < lossyHorizontalError){
-						if(lossyVerticalError <= options.quantizer){
-							writeBit(1);writeBit(0);
-							writeBit(0);
-							writeByte(upper_avg);
-							writeByte(lower_avg);
-							stats.lossy_small_gradients++;
-							continue
-						}
-					}
-					else{
-						if(lossyHorizontalError <= options.quantizer){
-							writeBit(1);writeBit(0);
-							writeBit(1);
-							writeByte(left_avg);
-							writeByte(right_avg);
-							stats.lossy_small_gradients++;
-							continue
-						}
-					}
-				}
-				else{
-					if(dia1_err < dia2_err){
-						if(dia1_err <= options.quantizer){
-							writeBit(1);writeBit(1);
-							writeBit(0);
-							writeByte(chunck[0][0]);
-							writeByte(chunck[1][1]);
-							stats.lossy_small_diagonals++;
-							continue
-						}
-					}
-					else{
-						if(dia2_err <= options.quantizer){
-							writeBit(1);writeBit(1);
-							writeBit(1);
-							writeByte(chunck[1][0]);
-							writeByte(chunck[0][1]);
-							stats.lossy_small_diagonals++;
-							continue
-						}
-					}
-				}
-			}
-		}
-		//subdivide
-		if(curr.size === 1){
-			console.log(avg_error)
-			throw "should never happen"
-		}
-		writeBit(0);writeBit(0);
-		blockQueue.push({
-			x: curr.x,
-			y: curr.y,
-			size: curr.size/2
-		})
-		blockQueue.push({
-			x: curr.x + curr.size/2,
-			y: curr.y,
-			size: curr.size/2
-		})
-		blockQueue.push({
-			x: curr.x,
-			y: curr.y + curr.size/2,
-			size: curr.size/2
-		})
-		blockQueue.push({
-			x: curr.x + curr.size/2,
-			y: curr.y + curr.size/2,
-			size: curr.size/2
-		})
 	}
+	encode_channel();
+	let size1 = hohData.length;
+	if(options.hasOwnProperty("subSampling")){
+		options.quantizer = options.subSampling
+	}
+	imageData = CBdata;
+	encode_channel();
+	imageData = CRdata;
+	encode_channel();
+
+	stats.lumaSize = size1 - 7;
+	stats.colourSize = hohData.length - size1;
 
 	if(aritmetic_queue.length){
 		stats.chunking.fail++;
@@ -975,96 +988,114 @@ function decodeHoh(hohData){
 		return byte
 	}
 
+	let decode_channel = function(){
 	
-	let imageData = [];
-	for(let i=0;i<width;i++){
-		imageData.push(new Array(height).fill(255))
-	}
+		let imageData = [];
+		for(let i=0;i<width;i++){
+			imageData.push(new Array(height).fill(255))
+		}
 
-	let blockQueue = [{x: 0,y:0, size: encoding_size}];
-	while(blockQueue.length){
-		let curr = blockQueue.pop();
-		if(
-			curr.x >= width
-			|| curr.y >= height
-		){
-			continue
-		}
-		if(curr.size === 1){
-			imageData[curr.x][curr.y] = readByte();
-			continue
-		}
-		let headBit1 = readBit();
-		let headBit2 = readBit();
-		if(headBit1 === 0 && headBit2 === 1){
-			let solid = readByte();
-			for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
-				for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
-					imageData[i][j] = solid
+		let blockQueue = [{x: 0,y:0, size: encoding_size}];
+		while(blockQueue.length){
+			let curr = blockQueue.pop();
+			if(
+				curr.x >= width
+				|| curr.y >= height
+			){
+				continue
+			}
+			if(curr.size === 1){
+				imageData[curr.x][curr.y] = readByte();
+				continue
+			}
+			let headBit1 = readBit();
+			let headBit2 = readBit();
+			if(headBit1 === 0 && headBit2 === 1){
+				let solid = readByte();
+				for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+					for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+						imageData[i][j] = solid
+					}
 				}
 			}
-		}
-		else if(headBit1 === 1 && headBit2 === 0){
-			let direction = readBit();
-			if(direction){
-				let left = readByte();
-				let right = readByte();
+			else if(headBit1 === 1 && headBit2 === 0){
+				let direction = readBit();
+				if(direction){
+					let left = readByte();
+					let right = readByte();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
+						}
+					}
+				}
+				else{
+					let top = readByte();
+					let bottom = readByte();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
+						}
+					}
+				}
+			}
+			else if(headBit1 === 1 && headBit2 === 1){
+				let direction = readBit();
+				let colour1 = readByte();
+				let colour2 = readByte();
 				for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 					for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-						imageData[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
+						if(direction){
+							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
+						}
+						else{
+							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
+						}
 					}
 				}
 			}
-			else{
-				let top = readByte();
-				let bottom = readByte();
-				for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-					for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-						imageData[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
-					}
-				}
+			else if(curr.size > 1){
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				})
 			}
 		}
-		else if(headBit1 === 1 && headBit2 === 1){
-			let direction = readBit();
-			let colour1 = readByte();
-			let colour2 = readByte();
-			for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-				for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-					if(direction){
-						imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
-					}
-					else{
-						imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
-					}
-				}
-			}
-		}
-		else if(curr.size > 1){
-			blockQueue.push({
-				x: curr.x,
-				y: curr.y,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x + curr.size/2,
-				y: curr.y,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x,
-				y: curr.y + curr.size/2,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x + curr.size/2,
-				y: curr.y + curr.size/2,
-				size: curr.size/2
-			})
+		return imageData;
+	}
+	const luma = decode_channel();
+	if(currentIndex < hohData.length){
+		const CB = decode_channel();
+		const CR = decode_channel();
+		return {
+			luma: luma,
+			Cb: CB,
+			Cr: CR
 		}
 	}
-
-	return imageData
+	else{
+		return {
+			luma: luma,
+			Cb: [],
+			Cr: []
+		}
+	}
 }
 
 
