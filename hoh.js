@@ -337,7 +337,12 @@ function encodeHoh(imageData,options){
 			}
 			else{
 				for(let j=y;j<y + size;j++){
-					col.push(imageData[i][j] || imageData[i][height - 1])
+					if(j >= height){
+						col.push(imageData[i][height - 1])
+					}
+					else{
+						col.push(imageData[i][j])
+					}
 				}
 			}
 			data.push(col)
@@ -1004,8 +1009,8 @@ function decodeHoh(hohData){
 			if(direction){
 				let left = readByte();
 				let right = readByte();
-				for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
-					for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+				for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+					for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 						imageData[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
 					}
 				}
@@ -1013,8 +1018,8 @@ function decodeHoh(hohData){
 			else{
 				let top = readByte();
 				let bottom = readByte();
-				for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
-					for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+				for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+					for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 						imageData[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
 					}
 				}
@@ -1024,8 +1029,8 @@ function decodeHoh(hohData){
 			let direction = readBit();
 			let colour1 = readByte();
 			let colour2 = readByte();
-			for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
-				for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+			for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+				for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 					if(direction){
 						imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
 					}
