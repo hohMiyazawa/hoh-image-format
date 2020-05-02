@@ -291,6 +291,8 @@ function encodeHoh(imageData,options){
 	if(width){
 		height = imageData[0].length
 	}
+	stats.width = width;
+	stats.height = height;
 
 	let encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
 
@@ -834,7 +836,13 @@ function encodeHoh(imageData,options){
 	}
 	let t1 = performance.now();
 	stats.time = (t1 - t0);
-	console.log(stats);
+	stats.size = hohData.length;
+	if(hohStatsHandler){
+		hohStatsHandler(stats)
+	}
+	else{
+		console.log(stats)
+	}
 	
 	return Uint8Array.from(hohData) 
 }
