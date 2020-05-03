@@ -849,6 +849,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					writeBit(1);writeBit(1);
 					writeBit(0);
 					writeBit(1);
+					writeBit(0);
 					writeByte(chunck[0][0]);
 					writeByte(chunck[1][1]);
 					stats.small_solid_diagonals++;
@@ -861,7 +862,34 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					writeBit(1);writeBit(1);
 					writeBit(1);
 					writeBit(1);
+					writeBit(0);
 					writeByte(chunck[0][0]);
+					writeByte(chunck[0][1]);
+					stats.small_solid_diagonals++;
+					continue
+				}
+				if(
+					chunck[0][1] === chunck[1][1]
+					&& chunck[1][1] === chunck[1][0]
+				){
+					writeBit(1);writeBit(1);
+					writeBit(0);
+					writeBit(1);
+					writeBit(1);
+					writeByte(chunck[0][0]);
+					writeByte(chunck[1][1]);
+					stats.small_solid_diagonals++;
+					continue
+				}
+				if(
+					chunck[0][1] === chunck[1][1]
+					&& chunck[0][0] === chunck[0][1]
+				){
+					writeBit(1);writeBit(1);
+					writeBit(1);
+					writeBit(1);
+					writeBit(1);
+					writeByte(chunck[1][0]);
 					writeByte(chunck[0][1]);
 					stats.small_solid_diagonals++;
 					continue
@@ -873,11 +901,19 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					let right_avg = Math.round((chunck[1][0] + chunck[1][1])/2);
 					let NW_avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1])/3);
 					let NE_avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[1][1])/3);
+
+					let SW_avg = Math.round((chunck[0][0] + chunck[0][1] + chunck[1][1])/3);
+					let SE_avg = Math.round((chunck[1][0] + chunck[0][1] + chunck[1][1])/3);
+
 					let lossyVerticalError = error_compare([[upper_avg,lower_avg],[upper_avg,lower_avg]],chunck,0,0);
 					let lossyHorizontalError = error_compare([[left_avg,left_avg],[right_avg,right_avg]],chunck,0,0);
 					let solid1Error = error_compare([[NW_avg,NW_avg],[NW_avg,chunck[1][1]]],chunck,0,0);
 					let solid2Error = error_compare([[NE_avg,chunck[0][1]],[NE_avg,NE_avg]],chunck,0,0);
-					if(Math.min(lossyVerticalError,lossyHorizontalError) <= Math.min(dia1_err,dia2_err,solid1Error,solid2Error)){
+
+					let weird1Error = error_compare([[chunck[0][0],SE_avg],[SE_avg,SE_avg]],chunck,0,0);
+					let weird2Error = error_compare([[SW_avg,SW_avg],[chunck[1][0],SW_avg]],chunck,0,0);
+
+					if(Math.min(lossyVerticalError,lossyHorizontalError) <= Math.min(dia1_err,dia2_err,solid1Error,solid2Error,weird1Error,weird2Error)){
 						if(lossyVerticalError < lossyHorizontalError){
 							if(lossyVerticalError <= options.quantizer){
 								writeBit(1);writeBit(0);
@@ -900,7 +936,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						}
 					}
 					else{
-						if(Math.min(dia1_err,dia2_err) <= Math.min(solid1Error,solid2Error)){
+						if(Math.min(dia1_err,dia2_err) <= Math.min(solid1Error,solid2Error,weird1Error,weird2Error)){
 							if(dia1_err < dia2_err){
 								if(dia1_err <= options.quantizer){
 									writeBit(1);writeBit(1);
@@ -925,26 +961,56 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							}
 						}
 						else{
-							if(solid1Error < solid2Error){
-								if(solid1Error <= options.quantizer){
-									writeBit(1);writeBit(1);
-									writeBit(0);
-									writeBit(1);
-									writeByte(chunck[0][0]);
-									writeByte(chunck[1][1]);
-									stats.lossy_small_solid_diagonals++;
-									continue
+							if(Math.min(solid1Error,solid2Error) < Math.min(weird1Error,weird2Error)){
+								if(solid1Error < solid2Error){
+									if(solid1Error <= options.quantizer){
+										writeBit(1);writeBit(1);
+										writeBit(0);
+										writeBit(1);
+										writeBit(0);
+										writeByte(chunck[0][0]);
+										writeByte(chunck[1][1]);
+										stats.lossy_small_solid_diagonals++;
+										continue
+									}
+								}
+								else{
+									if(solid2Error <= options.quantizer){
+										writeBit(1);writeBit(1);
+										writeBit(1);
+										writeBit(1);
+										writeBit(0);
+										writeByte(chunck[1][0]);
+										writeByte(chunck[0][1]);
+										stats.lossy_small_solid_diagonals++;
+										continue
+									}
 								}
 							}
 							else{
-								if(solid2Error <= options.quantizer){
-									writeBit(1);writeBit(1);
-									writeBit(1);
-									writeBit(1);
-									writeByte(chunck[1][0]);
-									writeByte(chunck[0][1]);
-									stats.lossy_small_solid_diagonals++;
-									continue
+								if(weird1Error < weird2Error){
+									if(weird1Error <= options.quantizer){
+										writeBit(1);writeBit(1);
+										writeBit(0);
+										writeBit(1);
+										writeBit(1);
+										writeByte(chunck[0][0]);
+										writeByte(chunck[1][1]);
+										stats.lossy_small_solid_diagonals++;
+										continue
+									}
+								}
+								else{
+									if(weird2Error <= options.quantizer){
+										writeBit(1);writeBit(1);
+										writeBit(1);
+										writeBit(1);
+										writeBit(1);
+										writeByte(chunck[1][0]);
+										writeByte(chunck[0][1]);
+										stats.lossy_small_solid_diagonals++;
+										continue
+									}
 								}
 							}
 						}
@@ -1217,29 +1283,61 @@ function decodeHoh(hohData){
 			else if(headBit1 === 1 && headBit2 === 1){
 				let direction = readBit();
 				let solidness = readBit();
+				let dullness = 0;
+				if(solidness === 1 && curr.size === 2){
+					dullness = readBit()
+				}
 				let colour1 = readByte();
 				let colour2 = readByte();
 				if(solidness){
-					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							if(direction){
-								if(
-									(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
-								){
-									imageData[i][j] = colour1
+					if(curr.size === 2 && dullness === 1){
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								if(direction){
+									if(
+										(curr.size - (i - curr.x) - 1) + j - curr.y < (curr.size - 1)
+									){
+										imageData[i][j] = colour1
+									}
+									else{
+										imageData[i][j] = colour2
+									}
 								}
 								else{
-									imageData[i][j] = colour2
+									if(
+										i + j - curr.x - curr.y < (curr.size - 1)
+									){
+										imageData[i][j] = colour1
+									}
+									else{
+										imageData[i][j] = colour2
+									}
 								}
 							}
-							else{
-								if(
-									i + j - curr.x - curr.y < curr.size
-								){
-									imageData[i][j] = colour1
+						}
+					}
+					else{
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								if(direction){
+									if(
+										(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
+									){
+										imageData[i][j] = colour1
+									}
+									else{
+										imageData[i][j] = colour2
+									}
 								}
 								else{
-									imageData[i][j] = colour2
+									if(
+										i + j - curr.x - curr.y < curr.size
+									){
+										imageData[i][j] = colour1
+									}
+									else{
+										imageData[i][j] = colour2
+									}
 								}
 							}
 						}
