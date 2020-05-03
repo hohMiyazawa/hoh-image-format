@@ -342,7 +342,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		for(let i=0;i<chunck1.length;i++){
 			for(let j=0;j<chunck1[i].length;j++){
 				if(offx + i < width && offy + j < height){
-					sumError += Math.pow(
+					let error = Math.pow(
 						Math.abs(
 							chunck2[i][j] - chunck1[i][j]
 						)/grower(Math.max(
@@ -351,6 +351,19 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						)),
 						2
 					)
+					sumError += error;
+					if(
+						options.edgeWeight
+						&& chunck1.length > 4
+						&& (
+							(i === 0 && offx !== 0)
+							|| (j === 0 && offy !== 0)
+							|| i === chunck1.length - 1
+							|| j === chunck1.length - 1
+						)
+					){
+						sumError += error * (options.edgeWeight * (Math.sqrt(chunck1.length) - 1) - 1)
+					}
 				}
 			}
 		}
@@ -395,7 +408,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		options.forceGradients = false//useless in lossless mode
 	}
 	if(!options.hasOwnProperty("maxBlockSize")){//use a sane limit, if no limit provided
-		options.maxBlockSize = 128
+		options.maxBlockSize = 64
 	}
 
 	let encode_channel = function(){

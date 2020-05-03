@@ -41,7 +41,7 @@ body{
 		<h4>Parameters:</h4>
 		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.1<br>
 		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
-		Max block size: <input id="maxBlockSize" value="128" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
+		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
 		Grouping constant: <input id="groupingConstant" value="8" type="number" min="0" step="1" max="255"> 8 is good for basically everything. A few % can sometimes be saved by tweaking it<br>
 		Brute-force gradients: <input id="bruteForce" type="checkbox" checked><br>
 		<button id="encodeButton">encode again</button>
@@ -215,7 +215,8 @@ let html_encode = function(){
 					forceGradientsExtra: true,
 					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
 					groupingConstant: parseInt(document.getElementById("groupingConstant").value) || 0,
-					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0
+					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0,
+					edgeWeight: 4,
 				},CBdata,CRdata)], fileName + ".hoh");
 			});
 			img.src = e.target.result;
