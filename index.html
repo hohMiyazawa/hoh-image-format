@@ -209,11 +209,11 @@ let html_encode = function(){
 					CRdata.push(col)
 				}
 				saveByteArray([encodeHoh(imageData,{
-					quantizer: parseFloat(document.getElementById("quantizer").value) || 0,
+					quantizer: (parseFloat(document.getElementById("quantizer").value) || 0)/10,
 					forceGradients: document.getElementById("bruteForce").checked,
 					lossySmallGradients: true,
 					forceGradientsExtra: true,
-					subSampling: parseFloat(document.getElementById("colourQuantizer").value) || 0,
+					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
 					groupingConstant: parseInt(document.getElementById("groupingConstant").value) || 0,
 					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0
 				},CBdata,CRdata)], fileName + ".hoh");

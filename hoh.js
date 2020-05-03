@@ -451,7 +451,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
 			let average = find_average(chunck);
 			let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
-			let localQuantizer = options.quantizer * (1 - Math.sqrt(curr.size/encoding_size));
+			let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + curr.size/16);
 			if(avg_error <= localQuantizer){
 				let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
 				let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
