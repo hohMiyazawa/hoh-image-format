@@ -106,6 +106,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		vertical_improvements: 0,
 		horizontal_improvements: 0,
 		diagonal_improvements: 0,
+		solid_diagonal_improvements: 0,
 		small_gradients: 0,
 		small_diagonals: 0,
 		small_solid_diagonals: 0,
@@ -533,6 +534,38 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 				let orto_error = Math.min(horizontal_error,vertical_error);
 				let dia_error = Math.min(diagonal1_error,diagonal2_error,solid1_error,solid2_error);
+				if(options.forceGradients){
+					let newNW_s = Math.min(NW_s + 1,255);
+					let diff = 1;
+					if(NW_s < SE_s){
+						newNW = Math.max(NW_s - 1,0);
+						diff = -1
+					}
+					let new_solid1_error = error_compare(chunck,create_diagonal_solid(newNW_s,SE_s,false,curr.size),curr.x,curr.y);
+					while(new_solid1_error < solid1_error){
+						stats.solid_diagonal_improvements++;
+						NW_s = newNW_s;
+						solid1_error = new_solid1_error;
+						newNW_ = Math.min(255,Math.max(newNW_s + diff,0));
+						new_solid1_error = error_compare(chunck,create_diagonal_solid(newNW_s,SE_s,false,curr.size),curr.x,curr.y);
+					}
+
+
+					let newNE_s = Math.min(NE_s + 1,255);
+					diff = 1;
+					if(NE_s < SW_s){
+						newNE = Math.max(NE_s - 1,0);
+						diff = -1
+					}
+					let new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
+					while(new_solid2_error < solid2_error){
+						stats.solid_diagonal_improvements++;
+						NE_s = newNE_s;
+						solid2_error = new_solid2_error;
+						newNE_ = Math.min(255,Math.max(newNE_s + diff,0));
+						new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
+					}
+				}
 				if(orto_error <= dia_error){
 					if(vertical_error < horizontal_error){
 						if(options.forceGradients){
@@ -960,19 +993,35 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	stats.colourSize = hohData.length - size1;
 
 	if(aritmetic_queue.length){
-		stats.chunking.fail++;
-		writeBitNative(0);writeBitNative(0);
-		aritmetic_queue.forEach(ele => {
-			if(ele === "1"){
-				writeBitNative(1)
-			}
-			else if(ele === "0"){
-				writeBitNative(0)
-			}
-			else{
-				writeByteNative(ele)
-			}
-		})
+		if(options.groupingConstant === 0){
+			aritmetic_queue.forEach(ele => {
+				if(ele === "1"){
+					writeBitNative(1)
+				}
+				else if(ele === "0"){
+					writeBitNative(0)
+				}
+				else{
+					writeByteNative(ele)
+				}
+			})
+			return
+		}
+		else{
+			stats.chunking.fail++;
+			writeBitNative(0);writeBitNative(0);
+			aritmetic_queue.forEach(ele => {
+				if(ele === "1"){
+					writeBitNative(1)
+				}
+				else if(ele === "0"){
+					writeBitNative(0)
+				}
+				else{
+					writeByteNative(ele)
+				}
+			})
+		}
 	}
 
 	while(bitBuffer.length){
