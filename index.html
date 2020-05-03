@@ -216,7 +216,7 @@ let html_encode = function(){
 					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
 					groupingConstant: parseInt(document.getElementById("groupingConstant").value) || 0,
 					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0,
-					edgeWeight: 4,
+					edgeWeight: 2,
 				},CBdata,CRdata)], fileName + ".hoh");
 			});
 			img.src = e.target.result;

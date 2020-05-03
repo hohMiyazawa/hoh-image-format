@@ -1084,7 +1084,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					writeByteNative(ele)
 				}
 			})
-			return
 		}
 		else{
 			stats.chunking.fail++;
