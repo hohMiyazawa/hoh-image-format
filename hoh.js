@@ -94,8 +94,100 @@ function create_diagonal_solid(colour1,colour2,direction,size){
 	return data
 }
 
+function createHuffman(freqs){
+	let workList = [];
+	let sizeUsed = 0;
+	Object.keys(freqs).forEach(symbol => {
+		if(freqs[symbol]){
+			workList.push({
+				isInternal: false,
+				symbol: symbol,
+				frequency: freqs[symbol]
+			});
+			sizeUsed += freqs[symbol]
+		}
+	});
+	if(!workList.length){
+		let ele0 = Object.keys(freqs)[0];
+		workList.push({
+			isInternal: false,
+			symbol: ele0,
+			frequency: 0
+		})
+	}
+	console.log("pre-huffman size: " + sizeUsed * Math.ceil(Math.log2(Object.keys(freqs).length)));
+	while(workList.length > 1){
+		workList.sort((b,a) => a.frequency - b.frequency);
+		let newInternal = {
+			isInternal: true,
+			right: workList.pop(),
+			left: workList.pop()
+		}
+		newInternal.frequency = newInternal.left.frequency + newInternal.right.frequency;
+		workList.push(newInternal)
+	}
+	return workList[0]
+}
+
+function buildBook(huffmanTree){
+	console.log(huffmanTree);
+	let traverse = function(huffNode,prefix){
+		if(huffNode.isInternal){
+			return traverse(
+				huffNode.left,
+				prefix.concat(0)
+			).concat(
+				traverse(
+					huffNode.right,
+					prefix.concat(1)
+				)
+			)
+		}
+		else{
+			return [{
+				symbol: huffNode.symbol,
+				frequency: huffNode.frequency,
+				code: prefix
+			}]
+		}
+	}
+	let book = {};
+	let sizeUsed = 0;
+	traverse(huffmanTree,[]).forEach(entry => {
+		book[entry.symbol] = entry.code;
+		sizeUsed += entry.code.length * entry.frequency
+	})
+	if(sizeUsed){
+		console.log("huffman size: " + sizeUsed)
+	}
+	return book
+}
+
+const smallSymbolTable = [
+	"pixels",
+	"whole",
+	"vertical",
+	"horizontal",
+	"diagonal_NW",
+	"diagonal_NE",
+	"diagonal_solid_NW",
+	"diagonal_solid_NE",
+	"diagonal_solid_SW",
+	"diagonal_solid_SE"
+]
+
+const largeSymbolTable = [
+	"divide",
+	"whole",
+	"vertical",
+	"horizontal",
+	"diagonal_NW",
+	"diagonal_NE",
+	"diagonal_solid_NW",
+	"diagonal_solid_NE"
+]
+
 function encodeHoh(imageData,options,CBdata,CRdata){
-	let t0 = performance.now();
 	let stats = {
 		whole: 0,
 		vertical: 0,
@@ -114,18 +206,11 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		lossy_small_diagonals: 0,
 		lossy_small_solid_diagonals: 0,
 		unlikely_improvements: 0,
-		negative_zero_abuse: 0,
-		chunking: {
-			fail: 0,
-			one: 0,
-			two: 0,
-			three: 0
-		}
+		huffman_tables: 0,
 	}
+	let t0 = performance.now();
 	let hohData = [];
 	let bitBuffer = [];
-	
-	let colour_byte_counter = 0;
 
 	let writeByteNative = function(integer){
 		bitBuffer = bitBuffer.concat(rePlex(integer));
@@ -139,183 +224,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	}
 
 	let aritmetic_queue = [];
-	let manage_a_queue = function(){
-		if(options.groupingConstant === 0){
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else{
-					writeByteNative(ele)
-				}
-			})
-			return
-		}
-		let integers = aritmetic_queue.filter(ele => !(ele === "1" || ele === "0"));
-		let maxbo = 0;
-		for(let i=1;i<integers.length;i++){
-			if(
-				(integers[i - 1] === 0 && integers[i] === 255)
-				|| (integers[i] === 0 && integers[i - 1] === 255)
-			){
-				continue
-			}
-			maxbo = Math.max(maxbo,Math.abs(integers[i - 1] - integers[i]))
-		};
-		
-		if(maxbo > 63){
-			stats.chunking.fail++;
-			writeBitNative(0);writeBitNative(0);
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else{
-					writeByteNative(ele)
-				}
-			})
-		}
-		else if(maxbo > 31){
-			stats.chunking.one++;
-			writeBitNative(0);writeBitNative(1);
-			let funne = false;
-			let forige;
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else if(!funne){
-					writeByteNative(ele);
-					funne = true;
-					forige = ele
-				}
-				else{
-					if(
-						(ele === 0 && forige === 255)
-						|| (forige === 0 && ele === 255)
-					){
-						writeBitNative(1);
-						stats.negative_zero_abuse++;
-						rePlex(0,6).forEach(bit => writeBitNative(bit));
-					}
-					else{
-						if(ele < forige){
-							writeBitNative(1)
-						}
-						else{
-							writeBitNative(0)
-						}
-						rePlex(Math.abs(ele - forige),6).forEach(bit => writeBitNative(bit));
-					}
-					forige = ele;
-				}
-			})
-		}
-		else if(maxbo > 15){
-			stats.chunking.two++;
-			writeBitNative(1);writeBitNative(0);
-			let funne = false;
-			let forige;
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else if(!funne){
-					writeByteNative(ele);
-					funne = true;
-					forige = ele
-				}
-				else{
-					if(
-						(ele === 0 && forige === 255)
-						|| (forige === 0 && ele === 255)
-					){
-						writeBitNative(1);
-						stats.negative_zero_abuse++;
-						rePlex(0,5).forEach(bit => writeBitNative(bit));
-					}
-					else{
-						if(ele < forige){
-							writeBitNative(1)
-						}
-						else{
-							writeBitNative(0)
-						}
-						rePlex(Math.abs(ele - forige),5).forEach(bit => writeBitNative(bit));
-					}
-					forige = ele;
-				}
-			})
-		}
-		else{
-			stats.chunking.three++;
-			writeBitNative(1);writeBitNative(1);
-			let funne = false;
-			let forige;
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else if(!funne){
-					writeByteNative(ele);
-					funne = true;
-					forige = ele
-				}
-				else{
-					if(
-						(ele === 0 && forige === 255)
-						|| (forige === 0 && ele === 255)
-					){
-						writeBitNative(1);
-						stats.negative_zero_abuse++;
-						rePlex(0,4).forEach(bit => writeBitNative(bit));
-					}
-					else{
-						if(ele < forige){
-							writeBitNative(1)
-						}
-						else{
-							writeBitNative(0)
-						}
-						rePlex(Math.abs(ele - forige),4).forEach(bit => writeBitNative(bit));
-					}
-					forige = ele;
-				}
-			})
-		}
-	}
-	let writeBit = function(integer){
-		if(integer === 1){
-			aritmetic_queue.push("1")
-		}
-		else{
-			aritmetic_queue.push("0")
-		}
-	}
-	let writeByte = function(integer){
-		aritmetic_queue.push(integer);
-		colour_byte_counter++;
-		if(colour_byte_counter === (options.groupingConstant || 8)){
-			manage_a_queue();
-			colour_byte_counter = 0;
-			aritmetic_queue = []
-		}
-	}
+
 	writeByteNative(72);writeByteNative(79);writeByteNative(72);
 	let width = imageData.length;
 	let height = 0;
@@ -331,7 +240,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	writeByteNative(width % 256);
 	writeByteNative(height >> 8);
 	writeByteNative(height % 256);
-	writeByteNative(options.groupingConstant);
 
 	function grower(num){
 		return Math.max(num - num*num/512,1)
@@ -411,19 +319,65 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		options.maxBlockSize = 64
 	}
 
+	let encodeHuffTable = function(root,symbols){
+		let blockLength = 8;
+		if(symbols){
+			blockLength = Math.ceil(Math.log2(symbols.length))
+		}
+		let traverse = function(huffNode){
+			if(huffNode.isInternal){
+				writeBitNative(1);
+				traverse(huffNode.left);
+				traverse(huffNode.right);
+			}
+			else{
+				writeBitNative(0);
+				if(symbols){
+					rePlex(symbols.indexOf(huffNode.symbol),blockLength).forEach(bit => writeBitNative(bit))
+				}
+				else{
+					rePlex(parseInt(huffNode.symbol),blockLength).forEach(bit => writeBitNative(bit))
+				}
+			}
+		};
+		traverse(root)
+	}
+
 	let encode_channel = function(){
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
+		let symbolFrequency = {};
+		smallSymbolTable.forEach(word => symbolFrequency[word] = 0);
+
+		let largeSymbolFrequency = {};
+		largeSymbolTable.forEach(word => largeSymbolFrequency[word] = 0);
+
+		let integerFrequency = new Array(256).fill(0);
+
+		let writeSymbol = function(symbol){
+			aritmetic_queue.push(symbol);
+			symbolFrequency[symbol]++
+		}
+		let writeLargeSymbol = function(symbol){
+			aritmetic_queue.push([symbol]);
+			largeSymbolFrequency[symbol]++
+		}
+		let forige = 0;
+		let writeByte = function(integer){
+			let encodedInteger = integer - forige;
+			forige = integer;
+			if(encodedInteger < 0){
+				encodedInteger += 256
+			}
+			aritmetic_queue.push(encodedInteger);
+			integerFrequency[encodedInteger]++
+		}
+
 		while(blockQueue.length){
 			let curr = blockQueue.pop();
 			if(
 				curr.x >= width
 				|| curr.y >= height
 			){
-				continue
-			}
-			if(curr.size === 1){
-				writeByte(imageData[curr.x][curr.y]);
-				stats.single++;
 				continue
 			}
 			if(
@@ -439,7 +393,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y + 1]
 				)
 			){
-				writeBit(0);writeBit(0);
+				writeLargeSymbol("divide");
 				blockQueue.push({
 					x: curr.x,
 					y: curr.y,
@@ -451,34 +405,35 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					size: curr.size/2
 				})
 				blockQueue.push({
-					x: curr.x,
+					x: curr.x + curr.size/2,
 					y: curr.y + curr.size/2,
 					size: curr.size/2
 				})
 				blockQueue.push({
-					x: curr.x + curr.size/2,
+					x: curr.x,
 					y: curr.y + curr.size/2,
 					size: curr.size/2
-				});
+				})
 				continue
 			}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
-			let average = find_average(chunck);
-			let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
-			let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + curr.size/16);
-			if(avg_error <= localQuantizer){
-				let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
-				let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-				let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
-				let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-				if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
-					writeBit(0);writeBit(1);
-					writeByte(average);
-					stats.whole++;
-					continue
+			if(curr.size >= 4){
+				let average = find_average(chunck);
+				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
+				let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + curr.size/16);
+				if(avg_error <= localQuantizer){
+					let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
+					let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+					let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
+					let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+					if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
+						writeLargeSymbol("whole");
+						writeByte(average);
+						stats.whole++;
+						continue;
+					}
 				}
-			}
-			if(curr.size >=4){
+//unclean
 				let mArr;
 				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
 					mArr = [
@@ -631,8 +586,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							}
 						}
 						if(vertical_error <= localQuantizer){
-							writeBit(1);writeBit(0);
-							writeBit(0);
+							writeLargeSymbol("vertical");
 							writeByte(top);
 							writeByte(bottom);
 							stats.vertical++;
@@ -690,8 +644,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							}
 						}
 						if(horizontal_error <= localQuantizer){
-							writeBit(1);writeBit(0);
-							writeBit(1);
+							writeLargeSymbol("horizontal");
 							writeByte(left);
 							writeByte(right);
 							stats.horizontal++;
@@ -734,9 +687,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 								}
 							}
 							if(diagonal1_error <= localQuantizer){
-								writeBit(1);writeBit(1);
-								writeBit(0);
-								writeBit(0);
+								writeLargeSymbol("diagonal_NW");
 								writeByte(NW);
 								writeByte(SE);
 								stats.diagonal++;
@@ -776,9 +727,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 								}
 							}
 							if(diagonal2_error <= localQuantizer){
-								writeBit(1);writeBit(1);
-								writeBit(1);
-								writeBit(0);
+								writeLargeSymbol("diagonal_NE");
 								writeByte(NE);
 								writeByte(SW);
 								stats.diagonal++;
@@ -789,9 +738,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					else{
 						if(solid1_error < solid2_error){
 							if(solid1_error <= localQuantizer){
-								writeBit(1);writeBit(1);
-								writeBit(0);
-								writeBit(1);
+								writeLargeSymbol("diagonal_solid_NW");
 								writeByte(NW_s);
 								writeByte(SE_s);
 								stats.solid_diagonal++;
@@ -800,9 +747,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						}
 						else{
 							if(solid2_error <= localQuantizer){
-								writeBit(1);writeBit(1);
-								writeBit(1);
-								writeBit(1);
+								writeLargeSymbol("diagonal_solid_NE");
 								writeByte(NE_s);
 								writeByte(SW_s);
 								stats.solid_diagonal++;
@@ -811,14 +756,46 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						}
 					}
 				}
+//unclean
+				writeLargeSymbol("divide");
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x + curr.size/2,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				})
+				blockQueue.push({
+					x: curr.x,
+					y: curr.y + curr.size/2,
+					size: curr.size/2
+				})
+				continue
 			}
 			if(curr.size === 2){
+				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
+				let wholeError = error_compare([[avg,avg],[avg,avg]],chunck,0,0);
+				if(
+					wholeError <= options.quantizer
+				){
+					writeSymbol("whole");
+					writeByte(chunck[0][0]);
+					stats.whole++;
+					continue
+				}
 				if(
 					chunck[0][0] === chunck[1][0]
 					&& chunck[0][1] === chunck[1][1]
 				){
-					writeBit(1);writeBit(0);
-					writeBit(0);
+					writeSymbol("vertical");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[0][1]);
 					stats.small_gradients++;
@@ -828,8 +805,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					chunck[0][0] === chunck[0][1]
 					&& chunck[1][0] === chunck[1][1]
 				){
-					writeBit(1);writeBit(0);
-					writeBit(1);
+					writeSymbol("horizontal");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[1][1]);
 					stats.small_gradients++;
@@ -837,9 +813,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				}
 				let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
 				if(dia1_err === 0){
-					writeBit(1);writeBit(1);
-					writeBit(0);
-					writeBit(0);
+					writeSymbol("diagonal_NW");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[1][1]);
 					stats.small_diagonals++;
@@ -847,9 +821,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				}
 				let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
 				if(dia2_err === 0){
-					writeBit(1);writeBit(1);
-					writeBit(1);
-					writeBit(0);
+					writeSymbol("diagonal_NE");
 					writeByte(chunck[1][0]);
 					writeByte(chunck[0][1]);
 					stats.small_diagonals++;
@@ -859,10 +831,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					chunck[0][0] === chunck[1][0]
 					&& chunck[0][0] === chunck[0][1]
 				){
-					writeBit(1);writeBit(1);
-					writeBit(0);
-					writeBit(1);
-					writeBit(0);
+					writeSymbol("diagonal_solid_NW");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[1][1]);
 					stats.small_solid_diagonals++;
@@ -872,10 +841,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					chunck[0][0] === chunck[1][0]
 					&& chunck[0][0] === chunck[1][1]
 				){
-					writeBit(1);writeBit(1);
-					writeBit(1);
-					writeBit(1);
-					writeBit(0);
+					writeSymbol("diagonal_solid_NE");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[0][1]);
 					stats.small_solid_diagonals++;
@@ -885,10 +851,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					chunck[0][1] === chunck[1][1]
 					&& chunck[1][1] === chunck[1][0]
 				){
-					writeBit(1);writeBit(1);
-					writeBit(0);
-					writeBit(1);
-					writeBit(1);
+					writeSymbol("diagonal_solid_SE");
 					writeByte(chunck[0][0]);
 					writeByte(chunck[1][1]);
 					stats.small_solid_diagonals++;
@@ -898,16 +861,13 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					chunck[0][1] === chunck[1][1]
 					&& chunck[0][0] === chunck[0][1]
 				){
-					writeBit(1);writeBit(1);
-					writeBit(1);
-					writeBit(1);
-					writeBit(1);
+					writeSymbol("diagonal_solid_SW");
 					writeByte(chunck[1][0]);
 					writeByte(chunck[0][1]);
 					stats.small_solid_diagonals++;
 					continue
 				}
-				if(options.lossySmallGradients){
+				if(options.lossySmallGradients && options.quantizer){
 					let upper_avg = Math.round((chunck[0][0] + chunck[1][0])/2);
 					let lower_avg = Math.round((chunck[0][1] + chunck[1][1])/2);
 					let left_avg = Math.round((chunck[0][0] + chunck[0][1])/2);
@@ -929,8 +889,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					if(Math.min(lossyVerticalError,lossyHorizontalError) <= Math.min(dia1_err,dia2_err,solid1Error,solid2Error,weird1Error,weird2Error)){
 						if(lossyVerticalError < lossyHorizontalError){
 							if(lossyVerticalError <= options.quantizer){
-								writeBit(1);writeBit(0);
-								writeBit(0);
+							writeSymbol("vertical");
 								writeByte(upper_avg);
 								writeByte(lower_avg);
 								stats.lossy_small_gradients++;
@@ -939,8 +898,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						}
 						else{
 							if(lossyHorizontalError <= options.quantizer){
-								writeBit(1);writeBit(0);
-								writeBit(1);
+								writeSymbol("horizontal");
 								writeByte(left_avg);
 								writeByte(right_avg);
 								stats.lossy_small_gradients++;
@@ -952,9 +910,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						if(Math.min(dia1_err,dia2_err) <= Math.min(solid1Error,solid2Error,weird1Error,weird2Error)){
 							if(dia1_err < dia2_err){
 								if(dia1_err <= options.quantizer){
-									writeBit(1);writeBit(1);
-									writeBit(0);
-									writeBit(0);
+									writeSymbol("diagonal_NW");
 									writeByte(chunck[0][0]);
 									writeByte(chunck[1][1]);
 									stats.lossy_small_diagonals++;
@@ -963,9 +919,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							}
 							else{
 								if(dia2_err <= options.quantizer){
-									writeBit(1);writeBit(1);
-									writeBit(1);
-									writeBit(0);
+									writeSymbol("diagonal_NE");
 									writeByte(chunck[1][0]);
 									writeByte(chunck[0][1]);
 									stats.lossy_small_diagonals++;
@@ -977,10 +931,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							if(Math.min(solid1Error,solid2Error) < Math.min(weird1Error,weird2Error)){
 								if(solid1Error < solid2Error){
 									if(solid1Error <= options.quantizer){
-										writeBit(1);writeBit(1);
-										writeBit(0);
-										writeBit(1);
-										writeBit(0);
+										writeSymbol("diagonal_solid_NW");
 										writeByte(chunck[0][0]);
 										writeByte(chunck[1][1]);
 										stats.lossy_small_solid_diagonals++;
@@ -989,10 +940,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 								}
 								else{
 									if(solid2Error <= options.quantizer){
-										writeBit(1);writeBit(1);
-										writeBit(1);
-										writeBit(1);
-										writeBit(0);
+										writeSymbol("diagonal_solid_NE");
 										writeByte(chunck[1][0]);
 										writeByte(chunck[0][1]);
 										stats.lossy_small_solid_diagonals++;
@@ -1003,10 +951,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							else{
 								if(weird1Error < weird2Error){
 									if(weird1Error <= options.quantizer){
-										writeBit(1);writeBit(1);
-										writeBit(0);
-										writeBit(1);
-										writeBit(1);
+										writeSymbol("diagonal_solid_SE");
 										writeByte(chunck[0][0]);
 										writeByte(chunck[1][1]);
 										stats.lossy_small_solid_diagonals++;
@@ -1015,10 +960,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 								}
 								else{
 									if(weird2Error <= options.quantizer){
-										writeBit(1);writeBit(1);
-										writeBit(1);
-										writeBit(1);
-										writeBit(1);
+										writeSymbol("diagonal_solid_SW");
 										writeByte(chunck[1][0]);
 										writeByte(chunck[0][1]);
 										stats.lossy_small_solid_diagonals++;
@@ -1029,37 +971,68 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						}
 					}
 				}
+				writeSymbol("pixels");
+				stats.single += 4;
+				writeByte(chunck[0][0]);
+				writeByte(chunck[1][0]);
+				writeByte(chunck[1][1]);
+				writeByte(chunck[0][1]);
 			}
-			//subdivide
-			if(curr.size === 1){
-				console.log(avg_error)
-				throw "should never happen"
-			}
-			writeBit(0);writeBit(0);
-			blockQueue.push({
-				x: curr.x,
-				y: curr.y,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x + curr.size/2,
-				y: curr.y,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x,
-				y: curr.y + curr.size/2,
-				size: curr.size/2
-			})
-			blockQueue.push({
-				x: curr.x + curr.size/2,
-				y: curr.y + curr.size/2,
-				size: curr.size/2
-			})
 		}
+		let largeHuffman = createHuffman(largeSymbolFrequency);
+		let largeSymbolBook = buildBook(largeHuffman);
+
+		let smallHuffman = createHuffman(symbolFrequency);
+		let smallSymbolBook = buildBook(smallHuffman);
+
+		let colourHuffman = createHuffman(integerFrequency);
+		let colourBook = buildBook(colourHuffman);
+
+		let size1 = hohData.length;
+
+		encodeHuffTable(largeHuffman,largeSymbolTable);
+		encodeHuffTable(smallHuffman,smallSymbolTable);
+		encodeHuffTable(colourHuffman);
+
+		stats.huffman_tables += hohData.length - size1;
+
+		console.log(largeSymbolBook);
+		console.log(smallSymbolBook);
+		console.log(colourBook);
+
+		let largeSymbolNumber = 0;
+		let symbolNumber = 0;
+		let integerNumber = 0;
+
+		aritmetic_queue.forEach(waiting => {
+			if(Array.isArray(waiting)){
+				bitBuffer.push(...largeSymbolBook[waiting[0]]);
+				largeSymbolNumber++
+			}
+			else if(isFinite(waiting)){
+				bitBuffer.push(...colourBook[waiting]);
+				integerNumber++
+			}
+			else{
+				bitBuffer.push(...smallSymbolBook[waiting])
+			}
+			while(bitBuffer.length > 7){
+				hohData.push(dePlex(bitBuffer.splice(0,8)));
+				symbolNumber++
+			}
+		});
+		aritmetic_queue = [];
+		console.log("largeSymbols",largeSymbolNumber);
+		console.log("symbols",symbolNumber);
+		console.log("colours",integerNumber);
 	}
+	writeBitNative(0);//default encoding mode
+	writeBitNative(0);
+
 	encode_channel();
+
 	let size1 = hohData.length;
+
 	if(options.hasOwnProperty("subSampling")){
 		options.quantizer = options.subSampling
 	}
@@ -1068,51 +1041,21 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	imageData = CRdata;
 	encode_channel();
 
-	stats.lumaSize = size1 - 7;
-	stats.colourSize = hohData.length - size1;
-
-	if(aritmetic_queue.length){
-		if(options.groupingConstant === 0){
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else{
-					writeByteNative(ele)
-				}
-			})
-		}
-		else{
-			stats.chunking.fail++;
-			writeBitNative(0);writeBitNative(0);
-			aritmetic_queue.forEach(ele => {
-				if(ele === "1"){
-					writeBitNative(1)
-				}
-				else if(ele === "0"){
-					writeBitNative(0)
-				}
-				else{
-					writeByteNative(ele)
-				}
-			})
-		}
-	}
-
 	while(bitBuffer.length){
 		writeBitNative(0)
 	}
+
 	let t1 = performance.now();
 	stats.time = (t1 - t0);
+	stats.luma = size1 - 8;
+	stats.chroma = hohData.length - size1 - 8;
 	stats.size = hohData.length;
+
 	if(hohStatsHandler){
 		hohStatsHandler(stats)
 	}
-	console.log(stats)
-	
+	console.log(stats);
+
 	return Uint8Array.from(hohData) 
 }
 
@@ -1140,105 +1083,52 @@ function decodeHoh(hohData){
 	let width = (readByteNative() << 8) + readByteNative();
 	let height = (readByteNative() << 8) + readByteNative();
 
+	let e_mode_1 = readBit();
+	let e_mode_2 = readBit();
+
 	let encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
 
-	let groupingConstant = readByteNative();
 	console.log(width,height);
 
-	let integersRemaining;
-	let integerLength;
-	let forige;
-	let initializeBlock = function(){
-		let head1 = readBit();
-		let head2 = readBit();
-		if(head1 === 0 && head2 === 0){
-			integerLength = 8
-		}
-		else if(head1 === 0 && head2 === 1){
-			integerLength = 7
-		}
-		else if(head1 === 1 && head2 === 0){
-			integerLength = 6
-		}
-		else{
-			integerLength = 5
-		}
-		integersRemaining = groupingConstant
-	};
-	if(groupingConstant){
-		initializeBlock();
+
+	let readColour = function(){
+		//
 	}
-	let readByte = function(){
-		if(groupingConstant === 0){
-			return readByteNative()
+
+	let decodeHuffTable = function(symbols){
+		let blockLength = 8;
+		if(symbols){
+			blockLength = Math.ceil(Math.log2(symbols.length))
 		}
-		if(bitBuffer.length < 8 && currentIndex < hohData.length){
-			bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
-		}
-		let byte;
-		if(integersRemaining === groupingConstant || integerLength === 8){
-			byte = dePlex(bitBuffer.splice(0,8))
-		}
-		else if(integerLength === 7){
-			let sign = 1;
-			if(readBit()){
-				sign = -1
-			}
-			let matiss = dePlex(bitBuffer.splice(0,6));
-			if(matiss === 0 && sign === -1){
-				if(forige === 0){
-					byte = 255
-				}
-				else{
-					byte = 0
+		let readNode = function(){
+			let isInternal = readBit();
+			if(isInternal){
+				return {
+					isInternal: true,
+					left: readNode(),
+					right: readNode()
 				}
 			}
 			else{
-				byte = forige + sign * matiss
-			}
-		}
-		else if(integerLength === 6){
-			let sign = 1;
-			if(readBit()){
-				sign = -1
-			}
-			let matiss = dePlex(bitBuffer.splice(0,5));
-			if(matiss === 0 && sign === -1){
-				if(forige === 0){
-					byte = 255
+				let matissa = [];
+				for(let i=0;i<blockLength;i++){
+					matissa.push(readBit())
+				}
+				if(symbols){
+					return {
+						isInternal: false,
+						symbol: symbols[dePlex(matissa)]
+					}
 				}
 				else{
-					byte = 0
+					return {
+						isInternal: false,
+						symbol: dePlex(matissa)
+					}
 				}
 			}
-			else{
-				byte = forige + sign * matiss
-			}
 		}
-		else{
-			let sign = 1;
-			if(readBit()){
-				sign = -1
-			}
-			let matiss = dePlex(bitBuffer.splice(0,4));
-			if(matiss === 0 && sign === -1){
-				if(forige === 0){
-					byte = 255
-				}
-				else{
-					byte = 0
-				}
-			}
-			else{
-				byte = forige + sign * matiss
-			}
-		}
-		forige = byte;
-		integersRemaining--;
-		if(integersRemaining === 0 && currentIndex < hohData.length){
-			initializeBlock()
-		}
-		return byte
+		return readNode()
 	}
 
 	let decode_channel = function(){
@@ -1248,7 +1138,79 @@ function decodeHoh(hohData){
 			imageData.push(new Array(height).fill(255))
 		}
 
+		let largeHuffman = decodeHuffTable(largeSymbolTable);
+		let smallHuffman = decodeHuffTable(smallSymbolTable);
+		let colourHuffman = decodeHuffTable();
+
+
+		let readLargeSymbol = function(){
+			let head = largeHuffman;
+			while(head.isInternal){
+				if(readBit()){
+					head = head.right
+				}
+				else{
+					head = head.left
+				}
+			}
+			return head.symbol
+		}
+
+		let readSmallSymbol = function(){
+			let head = smallHuffman;
+			while(head.isInternal){
+				if(readBit()){
+					head = head.right
+				}
+				else{
+					head = head.left
+				}
+			}
+			return head.symbol
+		}
+
+		let forige = 0;
+
+		let readColour = function(){
+			let head = colourHuffman;
+			while(head.isInternal){
+				if(readBit()){
+					head = head.right
+				}
+				else{
+					head = head.left
+				}
+			}
+			let decodedInteger = (head.symbol + forige) % 256;
+			forige = decodedInteger;
+			return decodedInteger
+		}
+
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
+
+		let write2x2 = function(curr,a,b,c,d){
+			if(curr.x + 1 < width){
+				if(curr.y + 1 < height){
+					imageData[curr.x][curr.y] = a;
+					imageData[curr.x + 1][curr.y] = b;
+					imageData[curr.x + 1][curr.y + 1] = c;
+					imageData[curr.x][curr.y + 1] = d;
+				}
+				else{
+					imageData[curr.x][curr.y] = a;
+					imageData[curr.x + 1][curr.y] = b;
+				}
+			}
+			else{
+				if(curr.y + 1 < height){
+					imageData[curr.x][curr.y] = a;
+					imageData[curr.x][curr.y + 1] = d;
+				}
+				else{
+					imageData[curr.x][curr.y] = a;
+				}
+			}
+		}
 		while(blockQueue.length){
 			let curr = blockQueue.pop();
 			if(
@@ -1258,40 +1220,162 @@ function decodeHoh(hohData){
 				continue
 			}
 			if(curr.size === 1){
-				imageData[curr.x][curr.y] = readByte();
-				continue
+				throw "should never happen"
 			}
-			let headBit1 = readBit();
-			let headBit2 = readBit();
-			if(headBit1 === 0 && headBit2 === 1){
-				let solid = readByte();
-				for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
-					for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
-						imageData[i][j] = solid
+			if(curr.size >= 4){
+				let instruction = readLargeSymbol();
+				if(instruction === "divide"){
+					blockQueue.push({
+						x: curr.x,
+						y: curr.y,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x + curr.size/2,
+						y: curr.y,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x + curr.size/2,
+						y: curr.y + curr.size/2,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x,
+						y: curr.y + curr.size/2,
+						size: curr.size/2
+					})
+				}
+				else if(instruction === "whole"){
+					let solid = readColour();
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = solid
+						}
 					}
 				}
-			}
-			else if(headBit1 === 1 && headBit2 === 0){
-				let direction = readBit();
-				if(direction){
-					let left = readByte();
-					let right = readByte();
+				else if(instruction === "horizontal"){
+					let left = readColour();
+					let right = readColour();
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 							imageData[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
 						}
 					}
 				}
-				else{
-					let top = readByte();
-					let bottom = readByte();
+				else if(instruction === "vertical"){
+					let top = readColour();
+					let bottom = readColour();
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 							imageData[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
 						}
 					}
 				}
+				else if(instruction === "diagonal_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
+						}
+					}
+				}
+				else if(instruction === "diagonal_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
+						}
+					}
+				}
+				else if(instruction === "diagonal_solid_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							if(
+								i + j - curr.x - curr.y < curr.size
+							){
+								imageData[i][j] = colour1
+							}
+							else{
+								imageData[i][j] = colour2
+							}
+						}
+					}
+				}
+				else if(instruction === "diagonal_solid_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							if(
+								(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
+							){
+								imageData[i][j] = colour1
+							}
+							else{
+								imageData[i][j] = colour2
+							}
+						}
+					}
+				}
 			}
+			if(curr.size === 2){
+				let instruction = readSmallSymbol();
+				if(instruction === "pixels"){
+					write2x2(curr,readColour(),readColour(),readColour(),readColour())
+				}
+				else if(instruction === "whole"){
+					let colour = readColour();
+					write2x2(curr,colour,colour,colour,colour)
+				}
+				else if(instruction === "vertical"){
+					let topColour = readColour();
+					let bottomColour = readColour();
+					write2x2(curr,topColour,topColour,bottomColour,bottomColour)
+				}
+				else if(instruction === "horizontal"){
+					let leftColour = readColour();
+					let rightColour = readColour();
+					write2x2(curr,leftColour,rightColour,rightColour,leftColour)
+				}
+				else if(instruction === "diagonal_NW"){
+					let a = readColour();
+					let b = readColour();
+					let avg = Math.round((a+b)/2);
+					write2x2(curr,a,avg,b,avg)
+				}
+				else if(instruction === "diagonal_NE"){
+					let a = readColour();
+					let b = readColour();
+					let avg = Math.round((a+b)/2);
+					write2x2(curr,avg,a,avg,b)
+				}
+				else if(instruction === "diagonal_solid_NW"){
+					let a = readColour();
+					let b = readColour();
+					write2x2(curr,a,a,b,a)
+				}
+				else if(instruction === "diagonal_solid_NE"){
+					let a = readColour();
+					let b = readColour();
+					write2x2(curr,a,a,a,b)
+				}
+				else if(instruction === "diagonal_solid_SE"){
+					let a = readColour();
+					let b = readColour();
+					write2x2(curr,a,b,b,b)
+				}
+				else if(instruction === "diagonal_solid_SW"){
+					let a = readColour();
+					let b = readColour();
+					write2x2(curr,b,a,b,b)
+				}
+			}
+/*
 			else if(headBit1 === 1 && headBit2 === 1){
 				let direction = readBit();
 				let solidness = readBit();
@@ -1302,32 +1386,6 @@ function decodeHoh(hohData){
 				let colour1 = readByte();
 				let colour2 = readByte();
 				if(solidness){
-					if(curr.size === 2 && dullness === 1){
-						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-								if(direction){
-									if(
-										(curr.size - (i - curr.x) - 1) + j - curr.y < (curr.size - 1)
-									){
-										imageData[i][j] = colour1
-									}
-									else{
-										imageData[i][j] = colour2
-									}
-								}
-								else{
-									if(
-										i + j - curr.x - curr.y < (curr.size - 1)
-									){
-										imageData[i][j] = colour1
-									}
-									else{
-										imageData[i][j] = colour2
-									}
-								}
-							}
-						}
-					}
 					else{
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -1355,41 +1413,8 @@ function decodeHoh(hohData){
 						}
 					}
 				}
-				else{
-					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							if(direction){
-								imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
-							}
-							else{
-								imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
-							}
-						}
-					}
-				}
 			}
-			else if(curr.size > 1){
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
-			}
+*/
 		}
 		return imageData;
 	}
