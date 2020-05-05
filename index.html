@@ -130,7 +130,7 @@ huffman tables: ${data.huffman_tables} bytes
 size: ${data.size} bytes
 - header: 8 bytes
 - luma: ${data.luma} bytes
-- chroma: ${data.chroma} bytes
+- chroma: ${Math.max(data.chroma,0)} bytes
 `
 }
 

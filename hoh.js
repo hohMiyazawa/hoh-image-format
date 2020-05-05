@@ -374,6 +374,21 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	}
 
 	let encode_channel = function(){
+		let testMonochrome = function(){
+			for(let i=0;i<width;i++){
+				for(let j=0;j<height;j++){
+					if(
+						!(imageData[i][j] === 0
+						|| imageData[i][j] === 255)
+					){
+						return false
+					}
+				}
+			}
+			return true
+		}
+
+		let monochrome = options.quantizer === 0 && testMonochrome();
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
 		let symbolFrequency = {};
 		smallSymbolTable.forEach(word => symbolFrequency[word] = 0);
@@ -400,6 +415,17 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 			aritmetic_queue.push(encodedInteger);
 			integerFrequency[encodedInteger]++
+		}
+		if(monochrome){
+			writeByte = function(integer){
+				//if(integer === 0 || integer === 255){
+					aritmetic_queue.push(integer);
+					integerFrequency[integer]++
+				//}
+				//else{
+					//throw "non-monochrome colour in monochrome mode"
+				//}
+			}
 		}
 
 		while(blockQueue.length){
@@ -528,7 +554,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				let SW_s = Math.round((mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13] + mArr[14])/6);
 
 				let solid1_error = error_compare(chunck,create_diagonal_solid(NW_s,SE_s,false,curr.size),curr.x,curr.y);
-				let solid2_error = error_compare(chunck,create_diagonal_solid(mArr[3],mArr[12],true,curr.size),curr.x,curr.y);
+				let solid2_error = error_compare(chunck,create_diagonal_solid(NE_s,SW_s,true,curr.size),curr.x,curr.y);
 
 				let orto_error = Math.min(horizontal_error,vertical_error);
 				let dia_error = Math.min(diagonal1_error,diagonal2_error,solid1_error,solid2_error);
@@ -799,6 +825,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							}
 						}
 					}
+	
 				}
 //unclean
 				writeLargeSymbol("divide");
@@ -822,8 +849,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size/2,
 					size: curr.size/2
 				})
-				continue
-			}
+				continue		}
 			if(curr.size === 2){
 				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
 				let wholeError = error_compare([[avg,avg],[avg,avg]],chunck,0,0);
@@ -1063,9 +1089,19 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		/*console.log("table-size",colourBuffer.length);
 		console.log("total",colourBuffer.length + postUsage);
 		console.log("default_book",defaultUsage);*/
+		/*console.log("pre-usage",preUsage/8);
+		console.log("default",defaultUsage);
+		console.log(monochrome,"total",colourBuffer.length + postUsage,colourBook);
+		console.log("intf",integerFrequency);*/
 
 		let mode = "huffman";
-		if(defaultUsage < colourBuffer.length + postUsage){
+		if(monochrome){
+			writeBitNative(0);
+			writeBitNative(1);
+			mode = "monochrome";
+			console.log("using monochrome")
+		}
+		else if(defaultUsage < colourBuffer.length + postUsage){
 			writeBitNative(1);
 			writeBitNative(0);
 			mode = "default";
@@ -1104,8 +1140,16 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				if(mode === "huffman"){
 					bitBuffer.push(...colourBook[waiting]);
 				}
-				else{
+				else if(mode === "default"){
 					bitBuffer.push(...default_book[waiting]);
+				}
+				else{
+					if(waiting === 0){
+						bitBuffer.push(0)
+					}
+					else{
+						bitBuffer.push(1)
+					}
 				}
 				integerNumber++
 			}
@@ -1231,11 +1275,15 @@ function decodeHoh(hohData){
 		let largeHuffman = decodeHuffTable(largeSymbolTable);
 		let smallHuffman = decodeHuffTable(smallSymbolTable);
 		let colourHuffman;
+		let monochrome = false;
 		if(e_mode_1 === 0 && e_mode_2 === 0){
 			colourHuffman = decodeHuffTable()
 		}
-		else{
+		else if(e_mode_1 === 1 && e_mode_2 === 0){
 			colourHuffman = default_tree
+		}
+		else{
+			monochrome = true
 		}
 
 
@@ -1280,6 +1328,17 @@ function decodeHoh(hohData){
 			let decodedInteger = (parseInt(head.symbol) + forige) % 256;
 			forige = decodedInteger;
 			return decodedInteger
+		}
+		if(monochrome){
+			readColour = function(){
+				let colourBit = readBit();
+				if(colourBit){
+					return 255
+				}
+				else{
+					return 0
+				}
+			}
 		}
 
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
