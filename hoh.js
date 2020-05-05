@@ -94,6 +94,89 @@ function create_diagonal_solid(colour1,colour2,direction,size){
 	return data
 }
 
+function create_odd_solid(colour1,colour2,direction,steep,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(direction){
+				if(steep){
+					if((size - i - 1) < size/4){
+						col.push(colour1)
+					}
+					else if((size - i - 1) >= 3*size/4){
+						col.push(colour2)
+					}
+					else if(((size - i - 1) - size/4)*2 + j === size - 1){
+						col.push(Math.round((colour1 + colour2)/2))
+					}
+					else if(((size - i - 1) - size/4)*2 + j < size){
+						col.push(colour1)
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+				else{
+					if(j < size/4){
+						col.push(colour1)
+					}
+					else if(j >= 3*size/4){
+						col.push(colour2)
+					}
+					else if((j - size/4)*2 + (size - i - 1) === size - 1){
+						col.push(Math.round((colour1 + colour2)/2))
+					}
+					else if((j - size/4)*2 + (size - i - 1) < size){
+						col.push(colour1)
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+			}
+			else{
+				if(steep){
+					if(i < size/4){
+						col.push(colour1)
+					}
+					else if(i >= 3*size/4){
+						col.push(colour2)
+					}
+					else if((i - size/4)*2 + j === size - 1){
+						col.push(Math.round((colour1 + colour2)/2))
+					}
+					else if((i - size/4)*2 + j < size){
+						col.push(colour1)
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+				else{
+					if(j < size/4){
+						col.push(colour1)
+					}
+					else if(j >= 3*size/4){
+						col.push(colour2)
+					}
+					else if((j - size/4)*2 + i === size - 1){
+						col.push(Math.round((colour1 + colour2)/2))
+					}
+					else if((j - size/4)*2 + i < size){
+						col.push(colour1)
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 let default_freqs = [];
 default_freqs = default_freqs.concat([
 	9000,
@@ -191,6 +274,7 @@ function buildBook(huffmanTree){
 	return book
 }
 
+
 const smallSymbolTable = [
 	"pixels",
 	"whole",
@@ -212,7 +296,11 @@ const largeSymbolTable = [
 	"diagonal_NW",
 	"diagonal_NE",
 	"diagonal_solid_NW",
-	"diagonal_solid_NE"
+	"diagonal_solid_NE",
+	"steep_NW",
+	"steep_NE",
+	"calm_NW",
+	"calm_NE"
 ]
 
 function encodeHoh(imageData,options,CBdata,CRdata){
@@ -489,7 +577,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						continue;
 					}
 				}
-//unclean
 				let mArr;
 				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
 					mArr = [
@@ -556,6 +643,27 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				let solid1_error = error_compare(chunck,create_diagonal_solid(NW_s,SE_s,false,curr.size),curr.x,curr.y);
 				let solid2_error = error_compare(chunck,create_diagonal_solid(NE_s,SW_s,true,curr.size),curr.x,curr.y);
 
+				let steep_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[12])/6);
+				let steep_SE = Math.round((mArr[3] + mArr[7] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
+
+				let calm_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[2] + mArr[3])/6);
+				let calm_SE = Math.round((mArr[12] + mArr[13] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
+
+				let steep_NE = Math.round((mArr[3] + mArr[2] + mArr[7] + mArr[6] + mArr[11] + mArr[15])/6);
+				let steep_SW = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13])/6);
+
+				let calm_NE = Math.round((mArr[0] + mArr[1] + mArr[6] + mArr[7] + mArr[2] + mArr[3])/6);
+				let calm_SW = Math.round((mArr[12] + mArr[13] + mArr[8] + mArr[9] + mArr[14] + mArr[15])/6);
+
+				let odd1_error = error_compare(chunck,create_odd_solid(steep_NW,steep_SE,false,true,curr.size),curr.x,curr.y);
+				let odd2_error = error_compare(chunck,create_odd_solid(calm_NW,calm_SE,false,false,curr.size),curr.x,curr.y);
+
+				let odd3_error = error_compare(chunck,create_odd_solid(steep_NE,steep_SW,true,true,curr.size),curr.x,curr.y);
+				let odd4_error = error_compare(chunck,create_odd_solid(calm_NE,calm_SW,true,false	,curr.size),curr.x,curr.y);
+
+				
+				let odd_errors = Math.min(odd1_error,odd2_error,odd3_error,odd4_error);
+
 				let orto_error = Math.min(horizontal_error,vertical_error);
 				let dia_error = Math.min(diagonal1_error,diagonal2_error,solid1_error,solid2_error);
 				if(options.forceGradients){
@@ -590,17 +698,59 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
 					}
 				}
-				if(Math.min(orto_error,avg_error) <= dia_error){
-					if(avg_error <= orto_error){
-						let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
-						let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-						let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
-						let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-						if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
-							writeLargeSymbol("whole");
-							writeByte(average);
-							stats.whole++;
-							continue;
+				if(Math.min(orto_error,avg_error,odd1_error) <= dia_error){
+					if(Math.min(avg_error,odd_errors) <= orto_error){
+						if(avg_error <= odd_errors){
+							if(avg_error <= localQuantizer){
+								let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
+								let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+								let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
+								let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+								if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
+									writeLargeSymbol("whole");
+									writeByte(average);
+									stats.whole++;
+									continue;
+								}
+							}
+						}
+						else{
+							if(Math.min(odd1_error,odd2_error) <= Math.min(odd3_error,odd4_error)){
+								if(odd1_error < odd2_error){
+									if(odd1_error <= localQuantizer){
+										writeLargeSymbol("steep_NW");
+										writeByte(steep_NW);
+										writeByte(steep_SE);
+										continue
+									}
+								}
+								else{
+									if(odd2_error <= localQuantizer){
+										writeLargeSymbol("calm_NW");
+										writeByte(calm_NW);
+										writeByte(calm_SE);
+										continue
+									}
+								}
+							}
+							else{
+								if(odd3_error < odd4_error){
+									if(odd3_error <= localQuantizer){
+										writeLargeSymbol("steep_NE");
+										writeByte(steep_NE);
+										writeByte(steep_SW);
+										continue
+									}
+								}
+								else{
+									if(odd4_error <= localQuantizer){
+										writeLargeSymbol("calm_NE");
+										writeByte(calm_NE);
+										writeByte(calm_SW);
+										continue
+									}
+								}
+							}
 						}
 					}
 					else{
@@ -827,7 +977,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					}
 	
 				}
-//unclean
 				writeLargeSymbol("divide");
 				blockQueue.push({
 					x: curr.x,
@@ -867,7 +1016,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("vertical");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[0][1]);
+					if(!monochrome){
+						writeByte(chunck[0][1])
+					}
 					stats.small_gradients++;
 					continue
 				}
@@ -877,7 +1028,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("horizontal");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[1][1]);
+					if(!monochrome){
+						writeByte(chunck[1][1])
+					}
 					stats.small_gradients++;
 					continue
 				}
@@ -903,7 +1056,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("diagonal_solid_NW");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[1][1]);
+					if(!monochrome){
+						writeByte(chunck[1][1])
+					}
 					stats.small_solid_diagonals++;
 					continue
 				}
@@ -913,7 +1068,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("diagonal_solid_NE");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[0][1]);
+					if(!monochrome){
+						writeByte(chunck[0][1])
+					}
 					stats.small_solid_diagonals++;
 					continue
 				}
@@ -923,7 +1080,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("diagonal_solid_SE");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[1][1]);
+					if(!monochrome){
+						writeByte(chunck[1][1])
+					}
 					stats.small_solid_diagonals++;
 					continue
 				}
@@ -933,7 +1092,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				){
 					writeSymbol("diagonal_solid_SW");
 					writeByte(chunck[1][0]);
-					writeByte(chunck[0][1]);
+					if(!monochrome){
+						writeByte(chunck[0][1])
+					}
 					stats.small_solid_diagonals++;
 					continue
 				}
@@ -1093,6 +1254,8 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		console.log("default",defaultUsage);
 		console.log(monochrome,"total",colourBuffer.length + postUsage,colourBook);
 		console.log("intf",integerFrequency);*/
+
+		console.log(integerFrequency[0],integerFrequency[255]);
 
 		let mode = "huffman";
 		if(monochrome){
@@ -1477,57 +1640,162 @@ function decodeHoh(hohData){
 						}
 					}
 				}
+				else if(instruction === "steep_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_odd_solid(colour1,colour2,false,true,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "calm_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_odd_solid(colour1,colour2,false,false,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "steep_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_odd_solid(colour1,colour2,true,true,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "calm_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_odd_solid(colour1,colour2,true,false,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
 			}
 			if(curr.size === 2){
 				let instruction = readSmallSymbol();
-				if(instruction === "pixels"){
-					write2x2(curr,readColour(),readColour(),readColour(),readColour())
+				if(monochrome){
+					if(instruction === "pixels"){
+						write2x2(curr,readColour(),readColour(),readColour(),readColour())
+					}
+					else if(instruction === "whole"){
+						let colour = readColour();
+						write2x2(curr,colour,colour,colour,colour)
+					}
+					else if(instruction === "vertical"){
+						let topColour = readColour();
+						let bottomColour = 0;
+						if(topColour === 0){
+							bottomColour = 255
+						}
+						write2x2(curr,topColour,topColour,bottomColour,bottomColour)
+					}
+					else if(instruction === "horizontal"){
+						let leftColour = readColour();
+						let rightColour = 0;
+						if(leftColour === 0){
+							rightColour = 255
+						}
+						write2x2(curr,leftColour,rightColour,rightColour,leftColour)
+					}
+					else if(instruction === "diagonal_NW"){
+						throw "not possible"
+					}
+					else if(instruction === "diagonal_NE"){
+						throw "not possible"
+					}
+					else if(instruction === "diagonal_solid_NW"){
+						let a = readColour();
+						let b = 0;
+						if(a === 0){
+							b = 255
+						}
+						write2x2(curr,a,a,b,a)
+					}
+					else if(instruction === "diagonal_solid_NE"){
+						let a = readColour();
+						let b = 0;
+						if(a === 0){
+							b = 255
+						}
+						write2x2(curr,a,a,a,b)
+					}
+					else if(instruction === "diagonal_solid_SE"){
+						let a = readColour();
+						let b = 0;
+						if(a === 0){
+							b = 255
+						}
+						write2x2(curr,a,b,b,b)
+					}
+					else if(instruction === "diagonal_solid_SW"){
+						let a = readColour();
+						let b = 0;
+						if(a === 0){
+							b = 255
+						}
+						write2x2(curr,b,a,b,b)
+					}
 				}
-				else if(instruction === "whole"){
-					let colour = readColour();
-					write2x2(curr,colour,colour,colour,colour)
-				}
-				else if(instruction === "vertical"){
-					let topColour = readColour();
-					let bottomColour = readColour();
-					write2x2(curr,topColour,topColour,bottomColour,bottomColour)
-				}
-				else if(instruction === "horizontal"){
-					let leftColour = readColour();
-					let rightColour = readColour();
-					write2x2(curr,leftColour,rightColour,rightColour,leftColour)
-				}
-				else if(instruction === "diagonal_NW"){
-					let a = readColour();
-					let b = readColour();
-					let avg = Math.round((a+b)/2);
-					write2x2(curr,a,avg,b,avg)
-				}
-				else if(instruction === "diagonal_NE"){
-					let a = readColour();
-					let b = readColour();
-					let avg = Math.round((a+b)/2);
-					write2x2(curr,avg,a,avg,b)
-				}
-				else if(instruction === "diagonal_solid_NW"){
-					let a = readColour();
-					let b = readColour();
-					write2x2(curr,a,a,b,a)
-				}
-				else if(instruction === "diagonal_solid_NE"){
-					let a = readColour();
-					let b = readColour();
-					write2x2(curr,a,a,a,b)
-				}
-				else if(instruction === "diagonal_solid_SE"){
-					let a = readColour();
-					let b = readColour();
-					write2x2(curr,a,b,b,b)
-				}
-				else if(instruction === "diagonal_solid_SW"){
-					let a = readColour();
-					let b = readColour();
-					write2x2(curr,b,a,b,b)
+				else{
+					if(instruction === "pixels"){
+						write2x2(curr,readColour(),readColour(),readColour(),readColour())
+					}
+					else if(instruction === "whole"){
+						let colour = readColour();
+						write2x2(curr,colour,colour,colour,colour)
+					}
+					else if(instruction === "vertical"){
+						let topColour = readColour();
+						let bottomColour = readColour();
+						write2x2(curr,topColour,topColour,bottomColour,bottomColour)
+					}
+					else if(instruction === "horizontal"){
+						let leftColour = readColour();
+						let rightColour = readColour();
+						write2x2(curr,leftColour,rightColour,rightColour,leftColour)
+					}
+					else if(instruction === "diagonal_NW"){
+						let a = readColour();
+						let b = readColour();
+						let avg = Math.round((a+b)/2);
+						write2x2(curr,a,avg,b,avg)
+					}
+					else if(instruction === "diagonal_NE"){
+						let a = readColour();
+						let b = readColour();
+						let avg = Math.round((a+b)/2);
+						write2x2(curr,avg,a,avg,b)
+					}
+					else if(instruction === "diagonal_solid_NW"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,a,b,a)
+					}
+					else if(instruction === "diagonal_solid_NE"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,a,a,b)
+					}
+					else if(instruction === "diagonal_solid_SE"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,b,b,b)
+					}
+					else if(instruction === "diagonal_solid_SW"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,b,a,b,b)
+					}
 				}
 			}
 		}
