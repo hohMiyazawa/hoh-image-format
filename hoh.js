@@ -94,6 +94,23 @@ function create_diagonal_solid(colour1,colour2,direction,size){
 	return data
 }
 
+function create_dip(colour1,colour2,direction,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(direction){
+				col.push(colour2 + (colour1 - colour2) * Math.abs(i - j)/(size - 1))
+			}
+			else{
+				col.push(colour2 + (colour1 - colour2) * Math.abs((size - i - 1) - j)/(size - 1))
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 function create_odd_solid(colour1,colour2,direction,steep,size){
 	let data = []
 	for(let i=0;i<size;i++){
@@ -303,6 +320,13 @@ const largeSymbolTable = [
 	"calm_NE"
 ]
 
+const EXPERIMENTAL = true;
+
+if(EXPERIMENTAL){
+	largeSymbolTable.push("dip_NW");
+	largeSymbolTable.push("dip_NE");
+}
+
 function encodeHoh(imageData,options,CBdata,CRdata){
 	let stats = {
 		whole: 0,
@@ -478,8 +502,8 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 		let monochrome = options.quantizer === 0 && testMonochrome();
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
-		let symbolFrequency = {};
-		smallSymbolTable.forEach(word => symbolFrequency[word] = 0);
+		let smallSymbolFrequency = {};
+		smallSymbolTable.forEach(word => smallSymbolFrequency[word] = 0);
 
 		let largeSymbolFrequency = {};
 		largeSymbolTable.forEach(word => largeSymbolFrequency[word] = 0);
@@ -488,7 +512,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 		let writeSymbol = function(symbol){
 			aritmetic_queue.push(symbol);
-			symbolFrequency[symbol]++
+			smallSymbolFrequency[symbol]++
 		}
 		let writeLargeSymbol = function(symbol){
 			aritmetic_queue.push([symbol]);
@@ -562,21 +586,18 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
 			if(curr.size >= 4){
+				let errorQueue = [];
+				//let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + (curr.size)/16);
+				let localQuantizer = 100*options.quantizer/(curr.size * Math.sqrt(curr.size));
+
 				let average = find_average(chunck);
 				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
-				let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + curr.size/16);
-				if(curr.size < 16 && avg_error <= localQuantizer){
-					let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
-					let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-					let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
-					let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-					if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
-						writeLargeSymbol("whole");
-						writeByte(average);
-						stats.whole++;
-						continue;
-					}
-				}
+				
+				errorQueue.push({
+					symbol: "whole",
+					error: avg_error,
+					colours: [average]
+				})
 				let mArr;
 				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
 					mArr = [
@@ -631,8 +652,14 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
 				let horizontal_error = error_compare(chunck,create_horizontal_gradient(left,right,curr.size),curr.x,curr.y);
 
-				let diagonal1_error = error_compare(chunck,create_diagonal_gradient(mArr[0],mArr[15],false,curr.size),curr.x,curr.y);
-				let diagonal2_error = error_compare(chunck,create_diagonal_gradient(mArr[3],mArr[12],true,curr.size),curr.x,curr.y);
+				let NW = mArr[0];
+				let SE = mArr[15];
+
+				let NE = mArr[3];
+				let SW = mArr[12];
+
+				let diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,SE,false,curr.size),curr.x,curr.y);
+				let diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,SW,true,curr.size),curr.x,curr.y);
 
 				let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
 				let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
@@ -659,18 +686,13 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				let odd2_error = error_compare(chunck,create_odd_solid(calm_NW,calm_SE,false,false,curr.size),curr.x,curr.y);
 
 				let odd3_error = error_compare(chunck,create_odd_solid(steep_NE,steep_SW,true,true,curr.size),curr.x,curr.y);
-				let odd4_error = error_compare(chunck,create_odd_solid(calm_NE,calm_SW,true,false	,curr.size),curr.x,curr.y);
+				let odd4_error = error_compare(chunck,create_odd_solid(calm_NE,calm_SW,true,false,curr.size),curr.x,curr.y);
 
-				
-				let odd_errors = Math.min(odd1_error,odd2_error,odd3_error,odd4_error);
-
-				let orto_error = Math.min(horizontal_error,vertical_error);
-				let dia_error = Math.min(diagonal1_error,diagonal2_error,solid1_error,solid2_error);
 				if(options.forceGradients){
 					let newNW_s = Math.min(NW_s + 1,255);
 					let diff = 1;
 					if(NW_s < SE_s){
-						newNW = Math.max(NW_s - 1,0);
+						newNW_s = Math.max(NW_s - 1,0);
 						diff = -1
 					}
 					let new_solid1_error = error_compare(chunck,create_diagonal_solid(newNW_s,SE_s,false,curr.size),curr.x,curr.y);
@@ -678,7 +700,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						stats.solid_diagonal_improvements++;
 						NW_s = newNW_s;
 						solid1_error = new_solid1_error;
-						newNW_ = Math.min(255,Math.max(newNW_s + diff,0));
+						newNW_s = Math.min(255,Math.max(newNW_s + diff,0));
 						new_solid1_error = error_compare(chunck,create_diagonal_solid(newNW_s,SE_s,false,curr.size),curr.x,curr.y);
 					}
 
@@ -686,7 +708,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					let newNE_s = Math.min(NE_s + 1,255);
 					diff = 1;
 					if(NE_s < SW_s){
-						newNE = Math.max(NE_s - 1,0);
+						newNE_s = Math.max(NE_s - 1,0);
 						diff = -1
 					}
 					let new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
@@ -697,285 +719,233 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						newNE_ = Math.min(255,Math.max(newNE_s + diff,0));
 						new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
 					}
-				}
-				if(Math.min(orto_error,avg_error,odd1_error) <= dia_error){
-					if(Math.min(avg_error,odd_errors) <= orto_error){
-						if(avg_error <= odd_errors){
-							if(avg_error <= localQuantizer){
-								let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
-								let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-								let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
-								let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
-								if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
-									writeLargeSymbol("whole");
-									writeByte(average);
-									stats.whole++;
-									continue;
-								}
-							}
+					let newNW = Math.min(NW + 1,255);
+					diff = 1;
+					if(NW < SE){
+						newNW = Math.max(NW - 1,0);
+						diff = -1
+					}
+					let new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y);
+					while(new_diagonal1_error < diagonal1_error){
+						stats.diagonal_improvements++;
+						NW = newNW;
+						diagonal1_error = new_diagonal1_error;
+						newNW = Math.min(255,Math.max(newNW + diff,0));
+						new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y)
+					}
+
+					let newSE = Math.min(SE + 1,255);
+					if(diff){
+						newSE = Math.max(SE - 1,0);
+					}
+					new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y);
+					while(new_diagonal1_error < diagonal1_error){
+						stats.diagonal_improvements++;
+						SE = newSE;
+						diagonal1_error = new_diagonal1_error;
+						newSE = Math.min(255,Math.max(newSE - diff,0));
+						new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y)
+					}
+					let newNE = Math.min(NE + 1,255);
+					diff = 1;
+					if(NE < SW){
+						newNE = Math.max(NE - 1,0);
+						diff = -1
+					}
+					let new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y);
+					while(new_diagonal2_error < diagonal2_error){
+						stats.diagonal_improvements++;
+						NE = newNE;
+						diagonal2_error = new_diagonal2_error;
+						newNE = Math.min(255,Math.max(newNE + diff,0));
+						new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y)
+					}
+
+					let newSW = Math.min(SW + 1,255);
+					if(diff){
+						newSW = Math.max(SW - 1,0);
+					}
+					new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y);
+					while(new_diagonal2_error < diagonal2_error){
+						stats.diagonal_improvements++;
+						SW = newSW;
+						diagonal2_error = new_diagonal2_error;
+						newSW = Math.min(255,Math.max(newSW - diff,0));
+						new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y)
+					}
+
+					let newTop = Math.min(top + 1,255);
+					diff = 1;
+					if(top < bottom){
+						newTop = Math.max(top - 1,0);
+						diff = -1
+					}
+					let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+					while(new_vertical_error < vertical_error){
+						stats.vertical_improvements++;
+						top = newTop;
+						vertical_error = new_vertical_error;
+						newTop = Math.min(255,Math.max(newTop + diff,0));
+						new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+					}
+					let newBottom = Math.min(bottom + 1,255);
+					if(diff){
+						newBottom = Math.max(bottom - 1,0);
+					}
+					new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+					while(new_vertical_error < vertical_error){
+						stats.vertical_improvements++;
+						bottom = newBottom;
+						vertical_error = new_vertical_error;
+						newBottom = Math.min(255,Math.max(newBottom - diff,0));
+						new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+					}
+					if(options.forceGradientsExtra){
+						diff = -diff;
+						newTop = Math.min(255,Math.max(newTop + diff,0));
+						new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+						while(new_vertical_error < vertical_error){
+							stats.unlikely_improvements++;
+							top = newTop;
+							vertical_error = new_vertical_error;
+							newTop = Math.min(255,Math.max(newTop + diff,0));
+							new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
 						}
-						else{
-							if(Math.min(odd1_error,odd2_error) <= Math.min(odd3_error,odd4_error)){
-								if(odd1_error < odd2_error){
-									if(odd1_error <= localQuantizer){
-										writeLargeSymbol("steep_NW");
-										writeByte(steep_NW);
-										writeByte(steep_SE);
-										continue
-									}
-								}
-								else{
-									if(odd2_error <= localQuantizer){
-										writeLargeSymbol("calm_NW");
-										writeByte(calm_NW);
-										writeByte(calm_SE);
-										continue
-									}
-								}
-							}
-							else{
-								if(odd3_error < odd4_error){
-									if(odd3_error <= localQuantizer){
-										writeLargeSymbol("steep_NE");
-										writeByte(steep_NE);
-										writeByte(steep_SW);
-										continue
-									}
-								}
-								else{
-									if(odd4_error <= localQuantizer){
-										writeLargeSymbol("calm_NE");
-										writeByte(calm_NE);
-										writeByte(calm_SW);
-										continue
-									}
-								}
-							}
+						newBottom =  Math.min(255,Math.max(newBottom - diff,0));
+						new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+						while(new_vertical_error < vertical_error){
+							stats.unlikely_improvements++;
+							bottom = newBottom;
+							vertical_error = new_vertical_error;
+							newBottom = Math.min(255,Math.max(newBottom - diff,0));
+							new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
 						}
 					}
-					else{
-						if(vertical_error < horizontal_error){
-							if(options.forceGradients){
-								let newTop = Math.min(top + 1,255);
-								let diff = 1;
-								if(top < bottom){
-									newTop = Math.max(top - 1,0);
-									diff = -1
-								}
-								let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-								while(new_vertical_error < vertical_error){
-									stats.vertical_improvements++;
-									top = newTop;
-									vertical_error = new_vertical_error;
-									newTop = Math.min(255,Math.max(newTop + diff,0));
-									new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-								}
-								let newBottom = Math.min(bottom + 1,255);
-								if(diff){
-									newBottom = Math.max(bottom - 1,0);
-								}
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-								while(new_vertical_error < vertical_error){
-									stats.vertical_improvements++;
-									bottom = newBottom;
-									vertical_error = new_vertical_error;
-									newBottom = Math.min(255,Math.max(newBottom - diff,0));
-									new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-								}
-								if(options.forceGradientsExtra){
-									diff = -diff;
-									newTop = Math.min(255,Math.max(newTop + diff,0));
-									new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-									while(new_vertical_error < vertical_error){
-										stats.unlikely_improvements++;
-										top = newTop;
-										vertical_error = new_vertical_error;
-										newTop = Math.min(255,Math.max(newTop + diff,0));
-										new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-									}
-									newBottom =  Math.min(255,Math.max(newBottom - diff,0));
-									new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-									while(new_vertical_error < vertical_error){
-										stats.unlikely_improvements++;
-										bottom = newBottom;
-										vertical_error = new_vertical_error;
-										newBottom = Math.min(255,Math.max(newBottom - diff,0));
-										new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-									}
-								}
-							}
-							if(vertical_error <= localQuantizer){
-								writeLargeSymbol("vertical");
-								writeByte(top);
-								writeByte(bottom);
-								stats.vertical++;
-								continue
-							}
+
+					let newLeft = Math.min(left + 1,255);
+					diff = 1;
+					if(left < right){
+						newLeft = Math.max(left - 1,0);
+						diff = -1
+					}
+					let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+					while(new_horizontal_error < horizontal_error){
+						stats.horizontal_improvements++;
+						left = newLeft;
+						horizontal_error = new_horizontal_error;
+						newLeft = Math.min(255,Math.max(newLeft + diff,0));
+						new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+					}
+					let newRight = Math.min(right + 1,255);
+					if(diff){
+						newRight = Math.max(right - 1,0);
+					}
+					new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+					while(new_horizontal_error < horizontal_error){
+						stats.horizontal_improvements++;
+						right = newRight;
+						horizontal_error = new_horizontal_error;
+						newRight = Math.min(255,Math.max(newRight - diff,0));
+						new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+					}
+					if(options.forceGradientsExtra){
+						diff = -diff;
+						newLeft = Math.min(255,Math.max(newLeft + diff,0));
+						new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+						while(new_horizontal_error < horizontal_error){
+							stats.unlikely_improvements++;
+							left = newLeft;
+							horizontal_error = new_horizontal_error;
+							newLeft = Math.min(255,Math.max(newLeft + diff,0));
+							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
 						}
-						else{
-							if(options.forceGradients){
-								let newLeft = Math.min(left + 1,255);
-								let diff = 1;
-								if(left < right){
-									newLeft = Math.max(left - 1,0);
-									diff = -1
-								}
-								let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-								while(new_horizontal_error < horizontal_error){
-									stats.horizontal_improvements++;
-									left = newLeft;
-									horizontal_error = new_horizontal_error;
-									newLeft = Math.min(255,Math.max(newLeft + diff,0));
-									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-								}
-								let newRight = Math.min(right + 1,255);
-								if(diff){
-									newRight = Math.max(right - 1,0);
-								}
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-								while(new_horizontal_error < horizontal_error){
-									stats.horizontal_improvements++;
-									right = newRight;
-									horizontal_error = new_horizontal_error;
-									newRight = Math.min(255,Math.max(newRight - diff,0));
-									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-								}
-								if(options.forceGradientsExtra){
-									diff = -diff;
-									newLeft = Math.min(255,Math.max(newLeft + diff,0));
-									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-									while(new_horizontal_error < horizontal_error){
-										stats.unlikely_improvements++;
-										left = newLeft;
-										horizontal_error = new_horizontal_error;
-										newLeft = Math.min(255,Math.max(newLeft + diff,0));
-										new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-									}
-									newRight = Math.min(255,Math.max(newRight - diff,0));
-									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-									while(new_horizontal_error < horizontal_error){
-										stats.unlikely_improvements++;
-										right = newRight;
-										horizontal_error = new_horizontal_error;
-										newRight = Math.min(255,Math.max(newRight - diff,0));
-										new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-									}
-								}
-							}
-							if(horizontal_error <= localQuantizer){
-								writeLargeSymbol("horizontal");
-								writeByte(left);
-								writeByte(right);
-								stats.horizontal++;
-								continue
-							}
+						newRight = Math.min(255,Math.max(newRight - diff,0));
+						new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+						while(new_horizontal_error < horizontal_error){
+							stats.unlikely_improvements++;
+							right = newRight;
+							horizontal_error = new_horizontal_error;
+							newRight = Math.min(255,Math.max(newRight - diff,0));
+							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
 						}
 					}
 				}
-				else{
-					if(Math.min(diagonal1_error,diagonal2_error) <= Math.min(solid1_error,solid2_error)){
-						if(diagonal1_error < diagonal2_error){
-							let NW = mArr[0];
-							let SE = mArr[15];
-							if(options.forceGradients){
-								let newNW = Math.min(NW + 1,255);
-								let diff = 1;
-								if(NW < SE){
-									newNW = Math.max(NW - 1,0);
-									diff = -1
-								}
-								let new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y);
-								while(new_diagonal1_error < diagonal1_error){
-									stats.diagonal_improvements++;
-									NW = newNW;
-									diagonal1_error = new_diagonal1_error;
-									newNW = Math.min(255,Math.max(newNW + diff,0));
-									new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(newNW,SE,false,curr.size),curr.x,curr.y)
-								}
+				errorQueue.push({
+					symbol: "vertical",
+					error: vertical_error,
+					colours: [top,bottom]
+				})
+				errorQueue.push({
+					symbol: "horizontal",
+					error: horizontal_error,
+					colours: [left,right]
+				})
+				errorQueue.push({
+					symbol: "diagonal_NW",
+					error: diagonal1_error,
+					colours: [NW,SE]
+				})
+				errorQueue.push({
+					symbol: "diagonal_NE",
+					error: diagonal2_error,
+					colours: [NE,SW]
+				})
+				errorQueue.push({
+					symbol: "diagonal_solid_NW",
+					error: solid1_error,
+					colours: [NW_s,SE_s]
+				})
+				errorQueue.push({
+					symbol: "diagonal_solid_NE",
+					error: solid2_error,
+					colours: [NE_s,SW_s]
+				})
+				errorQueue.push({
+					symbol: "steep_NW",
+					error: odd1_error,
+					colours: [steep_NW,steep_SE]
+				})
+				errorQueue.push({
+					symbol: "calm_NW",
+					error: odd2_error,
+					colours: [calm_NW,calm_SE]
+				})
+				errorQueue.push({
+					symbol: "steep_NE",
+					error: odd3_error,
+					colours: [steep_NE,steep_SW]
+				})
+				errorQueue.push({
+					symbol: "calm_NE",
+					error: odd4_error,
+					colours: [calm_NE,calm_SW]
+				})
 
-								let newSE = Math.min(SE + 1,255);
-								if(diff){
-									newSE = Math.max(SE - 1,0);
-								}
-								new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y);
-								while(new_diagonal1_error < diagonal1_error){
-									stats.diagonal_improvements++;
-									SE = newSE;
-									diagonal1_error = new_diagonal1_error;
-									newSE = Math.min(255,Math.max(newSE - diff,0));
-									new_diagonal1_error = error_compare(chunck,create_diagonal_gradient(NW,newSE,false,curr.size),curr.x,curr.y)
-								}
-							}
-							if(diagonal1_error <= localQuantizer){
-								writeLargeSymbol("diagonal_NW");
-								writeByte(NW);
-								writeByte(SE);
-								stats.diagonal++;
-								continue
-							}
-						}
-						else{
-							let NE = mArr[3];
-							let SW = mArr[12];
-							if(options.forceGradients){
-								let newNE = Math.min(NE + 1,255);
-								let diff = 1;
-								if(NE < SW){
-									newNE = Math.max(NE - 1,0);
-									diff = -1
-								}
-								let new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y);
-								while(new_diagonal2_error < diagonal2_error){
-									stats.diagonal_improvements++;
-									NE = newNE;
-									diagonal2_error = new_diagonal2_error;
-									newNE = Math.min(255,Math.max(newNE + diff,0));
-									new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(newNE,SW,true,curr.size),curr.x,curr.y)
-								}
+				let corner_NW_SE = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[11] + mArr[14] + mArr[15])/6);
+				let skraa_NE_SW = Math.round((mArr[3] + mArr[6] + mArr[9] + mArr[12])/4);
 
-								let newSW = Math.min(SW + 1,255);
-								if(diff){
-									newSW = Math.max(SW - 1,0);
-								}
-								new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y);
-								while(new_diagonal2_error < diagonal2_error){
-									stats.diagonal_improvements++;
-									SW = newSW;
-									diagonal2_error = new_diagonal2_error;
-									newSW = Math.min(255,Math.max(newSW - diff,0));
-									new_diagonal2_error = error_compare(chunck,create_diagonal_gradient(NE,newSW,true,curr.size),curr.x,curr.y)
-								}
-							}
-							if(diagonal2_error <= localQuantizer){
-								writeLargeSymbol("diagonal_NE");
-								writeByte(NE);
-								writeByte(SW);
-								stats.diagonal++;
-								continue
-							}
-						}
-					}
-					else{
-						if(solid1_error < solid2_error){
-							if(solid1_error <= localQuantizer){
-								writeLargeSymbol("diagonal_solid_NW");
-								writeByte(NW_s);
-								writeByte(SE_s);
-								stats.solid_diagonal++;
-								continue
-							}
-						}
-						else{
-							if(solid2_error <= localQuantizer){
-								writeLargeSymbol("diagonal_solid_NE");
-								writeByte(NE_s);
-								writeByte(SW_s);
-								stats.solid_diagonal++;
-								continue
-							}
-						}
-					}
-	
+				let corner_NE_SW = Math.round((mArr[2] + mArr[3] + mArr[7] + mArr[8] + mArr[12] + mArr[13])/6);
+				let skraa_NW_SE = Math.round((mArr[0] + mArr[5] + mArr[10] + mArr[15])/4);
+
+				errorQueue.push({
+					symbol: "dip_NW",
+					error: error_compare(chunck,create_dip(corner_NW_SE,skraa_NE_SW,false,curr.size),curr.x,curr.y),
+					colours: [corner_NW_SE,skraa_NE_SW]
+				})
+				errorQueue.push({
+					symbol: "dip_NE",
+					error: error_compare(chunck,create_dip(corner_NE_SW,skraa_NW_SE,true,curr.size),curr.x,curr.y),
+					colours: [corner_NE_SW,skraa_NW_SE]
+				})
+
+
+				errorQueue.sort((a,b) => a.error - b.error);
+				if(errorQueue[0].error <= localQuantizer){
+					writeLargeSymbol(errorQueue[0].symbol);
+					errorQueue[0].colours.forEach(colour => {
+						writeByte(colour);
+					})
+					continue
 				}
 				writeLargeSymbol("divide");
 				blockQueue.push({
@@ -1213,7 +1183,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		let largeHuffman = createHuffman(largeSymbolFrequency);
 		let largeSymbolBook = buildBook(largeHuffman);
 
-		let smallHuffman = createHuffman(symbolFrequency);
+		let smallHuffman = createHuffman(smallSymbolFrequency);
 		let smallSymbolBook = buildBook(smallHuffman);
 
 		let optionalStats = {};
@@ -1255,7 +1225,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		console.log(monochrome,"total",colourBuffer.length + postUsage,colourBook);
 		console.log("intf",integerFrequency);*/
 
-		console.log(integerFrequency[0],integerFrequency[255]);
+		console.log(smallSymbolFrequency,largeSymbolFrequency);
 
 		let mode = "huffman";
 		if(monochrome){
@@ -1674,6 +1644,26 @@ function decodeHoh(hohData){
 					let colour1 = readColour();
 					let colour2 = readColour();
 					let patch = create_odd_solid(colour1,colour2,true,false,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "dip_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_dip(colour1,colour2,false,curr.size);
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "dip_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_dip(colour1,colour2,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 							imageData[i][j] = patch[i - curr.x][j - curr.y];

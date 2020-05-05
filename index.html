@@ -111,19 +111,6 @@ function hohStatsHandler(data){
 	document.getElementById("encodeStats").innerText = `
 compression: ${Math.round((1 - (data.size / (data.width * data.height * 3)))*10000)/100 + "%"}
 time: ${data.time + "ms"}
-blocks used:
-- ${data.whole} | solid colour
-- ${data.vertical} | vertical gradients
-- ${data.horizontal} | horizontal gradients
-- ${data.diagonal} | diagonal gradients
-- ${data.solid_diagonal} | solid diagonals
-- ${data.small_gradients} | 2x2 lossless splits
-- ${data.small_diagonals} | 2x2 lossless diagonals
-- ${data.small_solid_diagonals} | 2x2 lossless solid diagonals
-- ${data.lossy_small_gradients} | 2x2 lossy splits
-- ${data.lossy_small_diagonals} | 2x2 lossy diagonals
-- ${data.lossy_small_solid_diagonals} | 2x2 lossy solid diagonals
-- ${data.single} | single pixels
 
 huffman tables: ${data.huffman_tables} bytes
 
