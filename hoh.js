@@ -94,6 +94,31 @@ function create_diagonal_solid(colour1,colour2,direction,size){
 	return data
 }
 
+let default_freqs = [];
+default_freqs = default_freqs.concat([
+	9000,
+	10000,
+	5000,
+	2500,
+	1250,
+	800
+])
+
+for(let i=6;i<128;i++){
+	default_freqs.push(600 - i*2)
+}
+for(let i=128;i<251;i++){
+	default_freqs.push(600 - 512 + i*2)
+}
+
+default_freqs = default_freqs.concat([
+	800,
+	1250,
+	2500,
+	5000,
+	10000
+])
+
 function createHuffman(freqs){
 	let workList = [];
 	let sizeUsed = 0;
@@ -115,7 +140,7 @@ function createHuffman(freqs){
 			frequency: 0
 		})
 	}
-	console.log("pre-huffman size: " + sizeUsed * Math.ceil(Math.log2(Object.keys(freqs).length)));
+	//console.log("pre-huffman size: " + sizeUsed * Math.ceil(Math.log2(Object.keys(freqs).length)));
 	while(workList.length > 1){
 		workList.sort((b,a) => a.frequency - b.frequency);
 		let newInternal = {
@@ -129,8 +154,11 @@ function createHuffman(freqs){
 	return workList[0]
 }
 
+let default_tree = createHuffman(default_freqs);
+let default_book = buildBook(default_tree);
+
 function buildBook(huffmanTree){
-	console.log(huffmanTree);
+	//console.log(huffmanTree);
 	let traverse = function(huffNode,prefix){
 		if(huffNode.isInternal){
 			return traverse(
@@ -158,7 +186,7 @@ function buildBook(huffmanTree){
 		sizeUsed += entry.code.length * entry.frequency
 	})
 	if(sizeUsed){
-		console.log("huffman size: " + sizeUsed)
+		//console.log("huffman size: " + sizeUsed)
 	}
 	return book
 }
@@ -320,27 +348,29 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 	}
 
 	let encodeHuffTable = function(root,symbols){
+		let bitArray = [];
 		let blockLength = 8;
 		if(symbols){
 			blockLength = Math.ceil(Math.log2(symbols.length))
 		}
 		let traverse = function(huffNode){
 			if(huffNode.isInternal){
-				writeBitNative(1);
+				bitArray.push(1);
 				traverse(huffNode.left);
 				traverse(huffNode.right);
 			}
 			else{
-				writeBitNative(0);
+				bitArray.push(0);
 				if(symbols){
-					rePlex(symbols.indexOf(huffNode.symbol),blockLength).forEach(bit => writeBitNative(bit))
+					rePlex(symbols.indexOf(huffNode.symbol),blockLength).forEach(bit => bitArray.push(bit))
 				}
 				else{
-					rePlex(parseInt(huffNode.symbol),blockLength).forEach(bit => writeBitNative(bit))
+					rePlex(parseInt(huffNode.symbol),blockLength).forEach(bit => bitArray.push(bit))
 				}
 			}
 		};
-		traverse(root)
+		traverse(root);
+		return bitArray
 	}
 
 	let encode_channel = function(){
@@ -421,7 +451,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				let average = find_average(chunck);
 				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
 				let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + curr.size/16);
-				if(avg_error <= localQuantizer){
+				if(curr.size < 16 && avg_error <= localQuantizer){
 					let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
 					let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
 					let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
@@ -534,121 +564,135 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						new_solid2_error = error_compare(chunck,create_diagonal_solid(newNE_s,SW_s,true,curr.size),curr.x,curr.y);
 					}
 				}
-				if(orto_error <= dia_error){
-					if(vertical_error < horizontal_error){
-						if(options.forceGradients){
-							let newTop = Math.min(top + 1,255);
-							let diff = 1;
-							if(top < bottom){
-								newTop = Math.max(top - 1,0);
-								diff = -1
-							}
-							let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-							while(new_vertical_error < vertical_error){
-								stats.vertical_improvements++;
-								top = newTop;
-								vertical_error = new_vertical_error;
-								newTop = Math.min(255,Math.max(newTop + diff,0));
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
-							}
-							let newBottom = Math.min(bottom + 1,255);
-							if(diff){
-								newBottom = Math.max(bottom - 1,0);
-							}
-							new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-							while(new_vertical_error < vertical_error){
-								stats.vertical_improvements++;
-								bottom = newBottom;
-								vertical_error = new_vertical_error;
-								newBottom = Math.min(255,Math.max(newBottom - diff,0));
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
-							}
-							if(options.forceGradientsExtra){
-								diff = -diff;
-								newTop = Math.min(255,Math.max(newTop + diff,0));
-								new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+				if(Math.min(orto_error,avg_error) <= dia_error){
+					if(avg_error <= orto_error){
+						let partialA = error_compare(get_chunck(curr.x,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y);
+						let partialB = error_compare(get_chunck(curr.x + curr.size/2,curr.y,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+						let partialC = error_compare(get_chunck(curr.x,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x,curr.y + curr.size/2);
+						let partialD = error_compare(get_chunck(curr.x + curr.size/2,curr.y + curr.size/2,curr.size/2),create_uniform(average,curr.size/2),curr.x + curr.size/2);
+						if(Math.max(partialA,partialB,partialC,partialD) <= 1 * options.quantizer){
+							writeLargeSymbol("whole");
+							writeByte(average);
+							stats.whole++;
+							continue;
+						}
+					}
+					else{
+						if(vertical_error < horizontal_error){
+							if(options.forceGradients){
+								let newTop = Math.min(top + 1,255);
+								let diff = 1;
+								if(top < bottom){
+									newTop = Math.max(top - 1,0);
+									diff = -1
+								}
+								let new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
 								while(new_vertical_error < vertical_error){
-									stats.unlikely_improvements++;
+									stats.vertical_improvements++;
 									top = newTop;
 									vertical_error = new_vertical_error;
 									newTop = Math.min(255,Math.max(newTop + diff,0));
 									new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
 								}
-								newBottom =  Math.min(255,Math.max(newBottom - diff,0));
+								let newBottom = Math.min(bottom + 1,255);
+								if(diff){
+									newBottom = Math.max(bottom - 1,0);
+								}
 								new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
 								while(new_vertical_error < vertical_error){
-									stats.unlikely_improvements++;
+									stats.vertical_improvements++;
 									bottom = newBottom;
 									vertical_error = new_vertical_error;
 									newBottom = Math.min(255,Math.max(newBottom - diff,0));
 									new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
 								}
+								if(options.forceGradientsExtra){
+									diff = -diff;
+									newTop = Math.min(255,Math.max(newTop + diff,0));
+									new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+									while(new_vertical_error < vertical_error){
+										stats.unlikely_improvements++;
+										top = newTop;
+										vertical_error = new_vertical_error;
+										newTop = Math.min(255,Math.max(newTop + diff,0));
+										new_vertical_error = error_compare(chunck,create_vertical_gradient(newTop,bottom,curr.size),curr.x,curr.y);
+									}
+									newBottom =  Math.min(255,Math.max(newBottom - diff,0));
+									new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+									while(new_vertical_error < vertical_error){
+										stats.unlikely_improvements++;
+										bottom = newBottom;
+										vertical_error = new_vertical_error;
+										newBottom = Math.min(255,Math.max(newBottom - diff,0));
+										new_vertical_error = error_compare(chunck,create_vertical_gradient(top,newBottom,curr.size),curr.x,curr.y);
+									}
+								}
+							}
+							if(vertical_error <= localQuantizer){
+								writeLargeSymbol("vertical");
+								writeByte(top);
+								writeByte(bottom);
+								stats.vertical++;
+								continue
 							}
 						}
-						if(vertical_error <= localQuantizer){
-							writeLargeSymbol("vertical");
-							writeByte(top);
-							writeByte(bottom);
-							stats.vertical++;
-							continue
-						}
-					}
-					else{
-						if(options.forceGradients){
-							let newLeft = Math.min(left + 1,255);
-							let diff = 1;
-							if(left < right){
-								newLeft = Math.max(left - 1,0);
-								diff = -1
-							}
-							let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-							while(new_horizontal_error < horizontal_error){
-								stats.horizontal_improvements++;
-								left = newLeft;
-								horizontal_error = new_horizontal_error;
-								newLeft = Math.min(255,Math.max(newLeft + diff,0));
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
-							}
-							let newRight = Math.min(right + 1,255);
-							if(diff){
-								newRight = Math.max(right - 1,0);
-							}
-							new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-							while(new_horizontal_error < horizontal_error){
-								stats.horizontal_improvements++;
-								right = newRight;
-								horizontal_error = new_horizontal_error;
-								newRight = Math.min(255,Math.max(newRight - diff,0));
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
-							}
-							if(options.forceGradientsExtra){
-								diff = -diff;
-								newLeft = Math.min(255,Math.max(newLeft + diff,0));
-								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+						else{
+							if(options.forceGradients){
+								let newLeft = Math.min(left + 1,255);
+								let diff = 1;
+								if(left < right){
+									newLeft = Math.max(left - 1,0);
+									diff = -1
+								}
+								let new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
 								while(new_horizontal_error < horizontal_error){
-									stats.unlikely_improvements++;
+									stats.horizontal_improvements++;
 									left = newLeft;
 									horizontal_error = new_horizontal_error;
 									newLeft = Math.min(255,Math.max(newLeft + diff,0));
 									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
 								}
-								newRight = Math.min(255,Math.max(newRight - diff,0));
+								let newRight = Math.min(right + 1,255);
+								if(diff){
+									newRight = Math.max(right - 1,0);
+								}
 								new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
 								while(new_horizontal_error < horizontal_error){
-									stats.unlikely_improvements++;
+									stats.horizontal_improvements++;
 									right = newRight;
 									horizontal_error = new_horizontal_error;
 									newRight = Math.min(255,Math.max(newRight - diff,0));
 									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
 								}
+								if(options.forceGradientsExtra){
+									diff = -diff;
+									newLeft = Math.min(255,Math.max(newLeft + diff,0));
+									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+									while(new_horizontal_error < horizontal_error){
+										stats.unlikely_improvements++;
+										left = newLeft;
+										horizontal_error = new_horizontal_error;
+										newLeft = Math.min(255,Math.max(newLeft + diff,0));
+										new_horizontal_error = error_compare(chunck,create_horizontal_gradient(newLeft,right,curr.size),curr.x,curr.y);
+									}
+									newRight = Math.min(255,Math.max(newRight - diff,0));
+									new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+									while(new_horizontal_error < horizontal_error){
+										stats.unlikely_improvements++;
+										right = newRight;
+										horizontal_error = new_horizontal_error;
+										newRight = Math.min(255,Math.max(newRight - diff,0));
+										new_horizontal_error = error_compare(chunck,create_horizontal_gradient(left,newRight,curr.size),curr.x,curr.y);
+									}
+								}
 							}
-						}
-						if(horizontal_error <= localQuantizer){
-							writeLargeSymbol("horizontal");
-							writeByte(left);
-							writeByte(right);
-							stats.horizontal++;
-							continue
+							if(horizontal_error <= localQuantizer){
+								writeLargeSymbol("horizontal");
+								writeByte(left);
+								writeByte(right);
+								stats.horizontal++;
+								continue
+							}
 						}
 					}
 				}
@@ -985,20 +1029,67 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		let smallHuffman = createHuffman(symbolFrequency);
 		let smallSymbolBook = buildBook(smallHuffman);
 
+		let optionalStats = {};
+
 		let colourHuffman = createHuffman(integerFrequency);
 		let colourBook = buildBook(colourHuffman);
 
 		let size1 = hohData.length;
 
-		encodeHuffTable(largeHuffman,largeSymbolTable);
-		encodeHuffTable(smallHuffman,smallSymbolTable);
-		encodeHuffTable(colourHuffman);
+		let preUsage = integerFrequency.reduce((acc,val) => acc + val * 8,0);
+		let postUsage = integerFrequency.reduce((acc,val,index) => {
+			if(val){
+				return acc + val * colourBook[index].length
+			}
+			else{
+				return acc
+			}
+		},0)
+		let defaultUsage = integerFrequency.reduce((acc,val,index) => {
+			if(val){
+				return acc + val * default_book[index].length
+			}
+			else{
+				return acc
+			}
+		},0)
+
+		/*console.log("ifr",integerFrequency);
+		console.log("clb",colourBook);
+		console.log("pre-usage",preUsage);
+		console.log("post-usage",postUsage);*/
+
+		let colourBuffer = encodeHuffTable(colourHuffman);
+		/*console.log("table-size",colourBuffer.length);
+		console.log("total",colourBuffer.length + postUsage);
+		console.log("default_book",defaultUsage);*/
+
+		let mode = "huffman";
+		if(defaultUsage < colourBuffer.length + postUsage){
+			writeBitNative(1);
+			writeBitNative(0);
+			mode = "default";
+			console.log("using default book")
+		}
+		else{
+			writeBitNative(0);
+			writeBitNative(0);
+		}
+
+		bitBuffer = bitBuffer.concat(encodeHuffTable(largeHuffman,largeSymbolTable));
+		bitBuffer = bitBuffer.concat(encodeHuffTable(smallHuffman,smallSymbolTable));
+		if(mode === "huffman"){
+			bitBuffer = bitBuffer.concat(colourBuffer)
+		}
+		while(bitBuffer.length > 7){
+			hohData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 
 		stats.huffman_tables += hohData.length - size1;
 
-		console.log(largeSymbolBook);
-		console.log(smallSymbolBook);
-		console.log(colourBook);
+		//console.log(largeSymbolBook);
+		//console.log(smallSymbolBook);
+		//console.log(colourBook);
 
 		let largeSymbolNumber = 0;
 		let symbolNumber = 0;
@@ -1010,24 +1101,27 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				largeSymbolNumber++
 			}
 			else if(isFinite(waiting)){
-				bitBuffer.push(...colourBook[waiting]);
+				if(mode === "huffman"){
+					bitBuffer.push(...colourBook[waiting]);
+				}
+				else{
+					bitBuffer.push(...default_book[waiting]);
+				}
 				integerNumber++
 			}
 			else{
-				bitBuffer.push(...smallSymbolBook[waiting])
+				bitBuffer.push(...smallSymbolBook[waiting]);
+				symbolNumber++
 			}
 			while(bitBuffer.length > 7){
-				hohData.push(dePlex(bitBuffer.splice(0,8)));
-				symbolNumber++
+				hohData.push(dePlex(bitBuffer.splice(0,8)))
 			}
 		});
 		aritmetic_queue = [];
-		console.log("largeSymbols",largeSymbolNumber);
-		console.log("symbols",symbolNumber);
-		console.log("colours",integerNumber);
+		//console.log("largeSymbols",largeSymbolNumber);
+		//console.log("symbols",symbolNumber);
+		//console.log("colours",integerNumber);
 	}
-	writeBitNative(0);//default encoding mode
-	writeBitNative(0);
 
 	encode_channel();
 
@@ -1083,17 +1177,10 @@ function decodeHoh(hohData){
 	let width = (readByteNative() << 8) + readByteNative();
 	let height = (readByteNative() << 8) + readByteNative();
 
-	let e_mode_1 = readBit();
-	let e_mode_2 = readBit();
-
 	let encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
 
 	console.log(width,height);
 
-
-	let readColour = function(){
-		//
-	}
 
 	let decodeHuffTable = function(symbols){
 		let blockLength = 8;
@@ -1138,9 +1225,18 @@ function decodeHoh(hohData){
 			imageData.push(new Array(height).fill(255))
 		}
 
+		let e_mode_1 = readBit();
+		let e_mode_2 = readBit();
+
 		let largeHuffman = decodeHuffTable(largeSymbolTable);
 		let smallHuffman = decodeHuffTable(smallSymbolTable);
-		let colourHuffman = decodeHuffTable();
+		let colourHuffman;
+		if(e_mode_1 === 0 && e_mode_2 === 0){
+			colourHuffman = decodeHuffTable()
+		}
+		else{
+			colourHuffman = default_tree
+		}
 
 
 		let readLargeSymbol = function(){
@@ -1181,7 +1277,7 @@ function decodeHoh(hohData){
 					head = head.left
 				}
 			}
-			let decodedInteger = (head.symbol + forige) % 256;
+			let decodedInteger = (parseInt(head.symbol) + forige) % 256;
 			forige = decodedInteger;
 			return decodedInteger
 		}
@@ -1375,46 +1471,6 @@ function decodeHoh(hohData){
 					write2x2(curr,b,a,b,b)
 				}
 			}
-/*
-			else if(headBit1 === 1 && headBit2 === 1){
-				let direction = readBit();
-				let solidness = readBit();
-				let dullness = 0;
-				if(solidness === 1 && curr.size === 2){
-					dullness = readBit()
-				}
-				let colour1 = readByte();
-				let colour2 = readByte();
-				if(solidness){
-					else{
-						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
-							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-								if(direction){
-									if(
-										(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
-									){
-										imageData[i][j] = colour1
-									}
-									else{
-										imageData[i][j] = colour2
-									}
-								}
-								else{
-									if(
-										i + j - curr.x - curr.y < curr.size
-									){
-										imageData[i][j] = colour1
-									}
-									else{
-										imageData[i][j] = colour2
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-*/
 		}
 		return imageData;
 	}
