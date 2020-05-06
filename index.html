@@ -100,7 +100,7 @@ function drawToCanvas(imageData){
 	else{
 		imageData.luma.forEach((col,i) => {
 			col.forEach((cel,j) => {
-				ctx.fillStyle = "rgb(" + Math.round(cel + 1.402 * (imageData.Cr[i][j] - 128)) + "," + Math.round(cel - 0.344136 * (imageData.Cb[i][j] - 128) - 0.714136 * (imageData.Cr[i][j] - 128)) + "," + Math.round(cel + 1.772 * (imageData.Cb[i][j] - 128)) +")";
+				ctx.fillStyle = "rgb(" + Math.round(cel + imageData.Cb[i][j] - imageData.Cr[i][j]) + "," + Math.round(cel + imageData.Cr[i][j] - 128) + "," + Math.round(cel - imageData.Cb[i][j] - imageData.Cr[i][j] + 256) + ")";
 				ctx.fillRect(i,j,1,1)
 			})
 		})
@@ -160,9 +160,9 @@ let html_encode = function(){
 					let col = [];
 					for(let j=0;j<img.height;j++){
 						col.push(Math.round(
-							contextData[i * 4 + j * img.width * 4] * 0.2989
-							+ contextData[i * 4 + j * img.width * 4 + 1] * 0.5870
-							+ contextData[i * 4 + j * img.width * 4 + 2] * 0.1140
+							contextData[i * 4 + j * img.width * 4]/4
+							+ contextData[i * 4 + j * img.width * 4 + 1]/2
+							+ contextData[i * 4 + j * img.width * 4 + 2]/4
 						))
 					};
 					imageData.push(col)
@@ -172,10 +172,9 @@ let html_encode = function(){
 					let col = [];
 					for(let j=0;j<img.height;j++){
 						col.push(Math.round(
-							128 
-							- contextData[i * 4 + j * img.width * 4] * 0.168736
-							- contextData[i * 4 + j * img.width * 4 + 1] * 0.331264
-							+ contextData[i * 4 + j * img.width * 4 + 2] * 0.5
+							128
+							+ contextData[i * 4 + j * img.width * 4]/2
+							- contextData[i * 4 + j * img.width * 4 + 2]/2
 						))
 					};
 					CBdata.push(col)
@@ -185,10 +184,10 @@ let html_encode = function(){
 					let col = [];
 					for(let j=0;j<img.height;j++){
 						col.push(Math.round(
-							128 
-							+ contextData[i * 4 + j * img.width * 4] * 0.5
-							- contextData[i * 4 + j * img.width * 4 + 1] * 0.418688
-							- contextData[i * 4 + j * img.width * 4 + 2] * 0.081312
+							128
+							- contextData[i * 4 + j * img.width * 4]/4
+							+ contextData[i * 4 + j * img.width * 4 + 1]/2
+							- contextData[i * 4 + j * img.width * 4 + 2]/4
 						))
 					};
 					CRdata.push(col)

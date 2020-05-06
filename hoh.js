@@ -907,7 +907,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						(a,b) => error_compare(chunck,create_odd_solid(a,b,true,false,curr.size),curr.x,curr.y),
 						"calm_NE"
 					))
-					/*errorQueue.push(sharpener(
+					errorQueue.push(sharpener(
 						top,
 						bottom,
 						(a,b) => error_compare(chunck,create_dct(a,b,0,1,curr.size),curr.x,curr.y),
@@ -990,7 +990,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						...sample_dct(chunck,3,1),
 						(a,b) => error_compare(chunck,create_dct(a,b,3,1,curr.size),curr.x,curr.y),
 						"dct31"
-					))*/
+					))
 
 					errorQueue.push(sharpener(
 						corner_NW_SE,
