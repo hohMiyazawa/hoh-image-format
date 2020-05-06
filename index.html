@@ -42,10 +42,10 @@ body{
 		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.2<br>
 		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
 		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
-		Brute-force gradients: <input id="bruteForce" type="checkbox" checked><br>
+		Brute-force gradients: <input id="bruteForce" type="checkbox"><br>
 		<button id="encodeButton">encode again</button>
 		<h4>Stats:</h4>
-		<p id="encodeStats"></p>
+		<pre id="encodeStats"></pre>
 		<script src="hoh.js"></script>
 		<script>
 let saveByteArray = (function(){
@@ -118,6 +118,9 @@ size: ${data.size} bytes
 - header: 8 bytes
 - luma: ${data.luma} bytes
 - chroma: ${Math.max(data.chroma,0)} bytes
+
+luma macroblocks: ${Object.keys(data.blockUsage[0].large).reduce((acc,val) => acc + data.blockUsage[0].large[val],0)}
+${Object.keys(data.blockUsage[0].large).map(val => "- " + val + ": " + data.blockUsage[0].large[val]).join("\n")}
 `
 }
 
@@ -197,7 +200,7 @@ let html_encode = function(){
 					forceGradientsExtra: true,
 					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
 					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0,
-					edgeWeight: 2,
+					edgeWeight: 2.5,
 				},CBdata,CRdata)], fileName + ".hoh");
 			});
 			img.src = e.target.result;
