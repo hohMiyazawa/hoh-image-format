@@ -42,7 +42,8 @@ body{
 		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.2<br>
 		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
 		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
-		Brute-force gradients: <input id="bruteForce" type="checkbox"><br>
+		Brute-force block colours: <input id="bruteForce" type="checkbox"><br>
+		Use DCT blocks: <input id="useDCT" type="checkbox"><br>
 		<button id="encodeButton">encode again</button>
 		<h4>Stats:</h4>
 		<pre id="encodeStats"></pre>
@@ -98,12 +99,19 @@ function drawToCanvas(imageData){
 		})
 	}
 	else{
-		imageData.luma.forEach((col,i) => {
-			col.forEach((cel,j) => {
-				ctx.fillStyle = "rgb(" + Math.round(cel + imageData.Cb[i][j] - imageData.Cr[i][j]) + "," + Math.round(cel + imageData.Cr[i][j] - 128) + "," + Math.round(cel - imageData.Cb[i][j] - imageData.Cr[i][j] + 256) + ")";
-				ctx.fillRect(i,j,1,1)
-			})
-		})
+		let showFlat = [];
+		for(let i=0;i<imageData.luma[0].length;i++){
+			for(let j=0;j<imageData.luma.length;j++){
+				showFlat.push(
+					Math.round(imageData.luma[j][i] + imageData.Cb[j][i] - imageData.Cr[j][i]),
+					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 128),
+					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 256),
+					255
+				)
+			}
+		}
+		let image = new ImageData(new Uint8ClampedArray(showFlat),imageData.luma.length);
+		ctx.putImageData(image,0,0);
 	}
 }
 
@@ -197,6 +205,7 @@ let html_encode = function(){
 					forceGradients: document.getElementById("bruteForce").checked,
 					lossySmallGradients: true,
 					forceGradientsExtra: true,
+					useDCT: document.getElementById("useDCT").checked,
 					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
 					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0,
 					edgeWeight: 2.5,

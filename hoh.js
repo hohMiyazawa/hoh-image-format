@@ -907,91 +907,92 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						(a,b) => error_compare(chunck,create_odd_solid(a,b,true,false,curr.size),curr.x,curr.y),
 						"calm_NE"
 					))
-					errorQueue.push(sharpener(
-						top,
-						bottom,
-						(a,b) => error_compare(chunck,create_dct(a,b,0,1,curr.size),curr.x,curr.y),
-						"dct01"
-					))
-					errorQueue.push(sharpener(
-						left,
-						right,
-						(a,b) => error_compare(chunck,create_dct(a,b,1,0,curr.size),curr.x,curr.y),
-						"dct10"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,0,3),
-						(a,b) => error_compare(chunck,create_dct(a,b,0,3,curr.size),curr.x,curr.y),
-						"dct03"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,3,0),
-						(a,b) => error_compare(chunck,create_dct(a,b,3,0,curr.size),curr.x,curr.y),
-						"dct30"
-					))
+					if(options.useDCT){
+						errorQueue.push(sharpener(
+							top,
+							bottom,
+							(a,b) => error_compare(chunck,create_dct(a,b,0,1,curr.size),curr.x,curr.y),
+							"dct01"
+						))
+						errorQueue.push(sharpener(
+							left,
+							right,
+							(a,b) => error_compare(chunck,create_dct(a,b,1,0,curr.size),curr.x,curr.y),
+							"dct10"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,0,3),
+							(a,b) => error_compare(chunck,create_dct(a,b,0,3,curr.size),curr.x,curr.y),
+							"dct03"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,3,0),
+							(a,b) => error_compare(chunck,create_dct(a,b,3,0,curr.size),curr.x,curr.y),
+							"dct30"
+						))
 
-					errorQueue.push(sharpener(
-						top,
-						middle_horizontal,
-						(a,b) => error_compare(chunck,create_dct(a,b,0,2,curr.size),curr.x,curr.y),
-						"dct02"
-					))
-					errorQueue.push(sharpener(
-						left,
-						middle_vertical,
-						(a,b) => error_compare(chunck,create_dct(a,b,2,0,curr.size),curr.x,curr.y),
-						"dct20"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,2,3),
-						(a,b) => error_compare(chunck,create_dct(a,b,2,3,curr.size),curr.x,curr.y),
-						"dct23"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,3,2),
-						(a,b) => error_compare(chunck,create_dct(a,b,3,2,curr.size),curr.x,curr.y),
-						"dct32"
-					))
+						errorQueue.push(sharpener(
+							top,
+							middle_horizontal,
+							(a,b) => error_compare(chunck,create_dct(a,b,0,2,curr.size),curr.x,curr.y),
+							"dct02"
+						))
+						errorQueue.push(sharpener(
+							left,
+							middle_vertical,
+							(a,b) => error_compare(chunck,create_dct(a,b,2,0,curr.size),curr.x,curr.y),
+							"dct20"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,2,3),
+							(a,b) => error_compare(chunck,create_dct(a,b,2,3,curr.size),curr.x,curr.y),
+							"dct23"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,3,2),
+							(a,b) => error_compare(chunck,create_dct(a,b,3,2,curr.size),curr.x,curr.y),
+							"dct32"
+						))
 
-					errorQueue.push(sharpener(
-						corner_NW_SE,
-						corner_NE_SW,
-						(a,b) => error_compare(chunck,create_dct(a,b,1,1,curr.size),curr.x,curr.y),
-						"dct11"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,2,2),
-						(a,b) => error_compare(chunck,create_dct(a,b,2,2,curr.size),curr.x,curr.y),
-						"dct22"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,3,3),
-						(a,b) => error_compare(chunck,create_dct(a,b,3,3,curr.size),curr.x,curr.y),
-						"dct33"
-					))
-					errorQueue.push(sharpener(
-						corner_NW_SE,
-						corner_NE_SW,
-						(a,b) => error_compare(chunck,create_dct(a,b,1,2,curr.size),curr.x,curr.y),
-						"dct12"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,1,3),
-						(a,b) => error_compare(chunck,create_dct(a,b,1,3,curr.size),curr.x,curr.y),
-						"dct13"
-					))
-					errorQueue.push(sharpener(
-						corner_NW_SE,
-						corner_NE_SW,
-						(a,b) => error_compare(chunck,create_dct(a,b,2,1,curr.size),curr.x,curr.y),
-						"dct21"
-					))
-					errorQueue.push(sharpener(
-						...sample_dct(chunck,3,1),
-						(a,b) => error_compare(chunck,create_dct(a,b,3,1,curr.size),curr.x,curr.y),
-						"dct31"
-					))
-
+						errorQueue.push(sharpener(
+							corner_NW_SE,
+							corner_NE_SW,
+							(a,b) => error_compare(chunck,create_dct(a,b,1,1,curr.size),curr.x,curr.y),
+							"dct11"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,2,2),
+							(a,b) => error_compare(chunck,create_dct(a,b,2,2,curr.size),curr.x,curr.y),
+							"dct22"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,3,3),
+							(a,b) => error_compare(chunck,create_dct(a,b,3,3,curr.size),curr.x,curr.y),
+							"dct33"
+						))
+						errorQueue.push(sharpener(
+							corner_NW_SE,
+							corner_NE_SW,
+							(a,b) => error_compare(chunck,create_dct(a,b,1,2,curr.size),curr.x,curr.y),
+							"dct12"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,1,3),
+							(a,b) => error_compare(chunck,create_dct(a,b,1,3,curr.size),curr.x,curr.y),
+							"dct13"
+						))
+						errorQueue.push(sharpener(
+							corner_NW_SE,
+							corner_NE_SW,
+							(a,b) => error_compare(chunck,create_dct(a,b,2,1,curr.size),curr.x,curr.y),
+							"dct21"
+						))
+						errorQueue.push(sharpener(
+							...sample_dct(chunck,3,1),
+							(a,b) => error_compare(chunck,create_dct(a,b,3,1,curr.size),curr.x,curr.y),
+							"dct31"
+						))
+					}
 					errorQueue.push(sharpener(
 						corner_NW_SE,
 						skraa_NE_SW,
@@ -1748,7 +1749,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,false,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] = patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1758,7 +1759,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,true,false,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] = patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1768,7 +1769,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,true,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] = patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1778,7 +1779,7 @@ function decodeHoh(hohData){
 					let patch = create_dct(colour1,colour2,parseInt(instruction[3]),parseInt(instruction[4]),curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] = patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
