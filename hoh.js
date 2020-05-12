@@ -111,6 +111,23 @@ function create_dip(colour1,colour2,direction,size){
 	return data
 }
 
+function combine_dct(dct_array){
+	if(dct_array.length === 1){
+		return dct_array[0]
+	}
+	let data = [];
+	let size = dct_array[0].length;
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			let abo = dct_array.reduce((acc,val) => acc + val[i][j],0);
+			col.push(abo/dct_array.length)
+		}
+		data.push(col)
+	}
+	return data
+}
+
 function create_dct(colour1,colour2,h_freq,v_freq,size){
 	let data = []
 	for(let i=0;i<size;i++){
@@ -124,9 +141,9 @@ function create_dct(colour1,colour2,h_freq,v_freq,size){
 	return data
 }
 
-function sample_dct(chunck,h_freq,v_freq){
+function sample(chunck,arr){
 	let size = chunck.length;
-	let dct = create_dct(0,1,h_freq,v_freq,size);
+	let dct = arr;
 	let sum_a = 0;
 	let count_a = 0;
 	let sum_b = 0;
@@ -144,6 +161,12 @@ function sample_dct(chunck,h_freq,v_freq){
 		}
 	}
 	return [Math.round(sum_a/count_a),Math.round(sum_b/count_b)]
+}
+
+function sample_dct(chunck,h_freq,v_freq){
+	let size = chunck.length;
+	let dct = create_dct(0,1,h_freq,v_freq,size);
+	return sample(chunck,dct);
 }
 
 function create_third(colour1,colour2,direction,fullness,size){
@@ -420,7 +443,7 @@ const largeSymbolTable = [
 	"dct02",
 	"dct20",
 	"dct32",
-	"dct23",
+	"dct23"
 ]
 
 function encodeHoh(imageData,options,CBdata,CRdata){
@@ -431,17 +454,12 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		horizontal: 0,
 		diagonal: 0,
 		solid_diagonal: 0,
-		vertical_improvements: 0,
-		horizontal_improvements: 0,
-		diagonal_improvements: 0,
-		solid_diagonal_improvements: 0,
 		small_gradients: 0,
 		small_diagonals: 0,
 		small_solid_diagonals: 0,
 		lossy_small_gradients: 0,
 		lossy_small_diagonals: 0,
 		lossy_small_solid_diagonals: 0,
-		unlikely_improvements: 0,
 		huffman_tables: 0,
 		blockUsage: [],
 		books: []
@@ -1250,8 +1268,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 		let smallHuffman = createHuffman(smallSymbolFrequency);
 		let smallSymbolBook = buildBook(smallHuffman);
-
-		let optionalStats = {};
 
 		let colourHuffman = createHuffman(integerFrequency);
 		let colourBook = buildBook(colourHuffman);
