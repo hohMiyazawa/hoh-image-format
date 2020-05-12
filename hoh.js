@@ -691,50 +691,12 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 				let average = find_average(chunck);
 				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
-
-				let sharpener = function(a,b,resolver,symbol){
-					let error = resolver(a,b);
-					if(options.forceGradients){
-						let new_a = Math.min(a + 1,255);
-						let diff = 1;
-						if(a < b){
-							new_a = Math.max(a - 1,0);
-							diff = -1
-						}
-						let new_error = resolver(new_a,b);
-						while(new_error < error){
-							a = new_a;
-							error = new_error;
-							new_a = Math.min(255,Math.max(a + diff,0));
-							new_error = resolver(new_a,b)
-						}
-						let new_b = Math.min(255,Math.max(b - diff,0));
-						new_error = resolver(a,new_b);
-						while(new_error < error){
-							b = new_b;
-							error = new_error;
-							new_b = Math.min(255,Math.max(b - diff,0));
-							new_error = resolver(a,new_b)
-						}
-					}
-					return {
-						symbol: symbol,
-						error: error,
-						colours: [a,b]
-					}
-				}
 				
-				/*errorQueue.push({
+				errorQueue.push({
 					symbol: "whole",
 					error: avg_error,
 					colours: [average]
-				})*/
-				errorQueue.push(sharpener(
-					average,
-					average,
-					(a,b) => error_compare(chunck,create_uniform(a,curr.size),curr.x,curr.y),
-					"whole"
-				))
+				})
 				let mArr;
 				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
 					mArr = [
@@ -781,6 +743,38 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
 						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4))
 					]
+				}
+
+				let sharpener = function(a,b,resolver,symbol){
+					let error = resolver(a,b);
+					if(options.forceGradients){
+						let new_a = Math.min(a + 1,255);
+						let diff = 1;
+						if(a < b){
+							new_a = Math.max(a - 1,0);
+							diff = -1
+						}
+						let new_error = resolver(new_a,b);
+						while(new_error < error){
+							a = new_a;
+							error = new_error;
+							new_a = Math.min(255,Math.max(a + diff,0));
+							new_error = resolver(new_a,b)
+						}
+						let new_b = Math.min(255,Math.max(b - diff,0));
+						new_error = resolver(a,new_b);
+						while(new_error < error){
+							b = new_b;
+							error = new_error;
+							new_b = Math.min(255,Math.max(b - diff,0));
+							new_error = resolver(a,new_b)
+						}
+					}
+					return {
+						symbol: symbol,
+						error: error,
+						colours: [a,b]
+					}
 				}
 
 
