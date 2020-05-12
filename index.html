@@ -104,8 +104,8 @@ function drawToCanvas(imageData){
 			for(let j=0;j<imageData.luma.length;j++){
 				showFlat.push(
 					Math.round(imageData.luma[j][i] + imageData.Cb[j][i] - imageData.Cr[j][i]),
-					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 128),
-					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 256),
+					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 127.5),
+					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 255),
 					255
 				)
 			}
@@ -180,7 +180,7 @@ let html_encode = function(){
 					let col = [];
 					for(let j=0;j<img.height;j++){
 						col.push(Math.round(
-							128
+							127.5
 							+ contextData[i * 4 + j * img.width * 4]/2
 							- contextData[i * 4 + j * img.width * 4 + 2]/2
 						))
@@ -192,7 +192,7 @@ let html_encode = function(){
 					let col = [];
 					for(let j=0;j<img.height;j++){
 						col.push(Math.round(
-							128
+							127.5
 							- contextData[i * 4 + j * img.width * 4]/4
 							+ contextData[i * 4 + j * img.width * 4 + 1]/2
 							- contextData[i * 4 + j * img.width * 4 + 2]/4
