@@ -49,8 +49,6 @@ body{
 		<pre id="encodeStats"></pre>
 		<script src="hoh.js"></script>
 		<script>
-
-
 let saveByteArray = (function(){
 	let a = document.createElement("a");
 	document.body.appendChild(a);
@@ -106,8 +104,8 @@ function drawToCanvas(imageData){
 			for(let j=0;j<imageData.luma.length;j++){
 				showFlat.push(
 					Math.round(imageData.luma[j][i] + imageData.Cb[j][i] - imageData.Cr[j][i]),
-					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 128),
-					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 256),
+					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 127.5),
+					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 255),
 					255
 				)
 			}
@@ -203,7 +201,7 @@ let html_encode = function(){
 					CRdata.push(col)
 				}
 				saveByteArray([encodeHoh(imageData,{
-					quantizer: (parseFloat(document.getElementById("quantizer").value) || 0)/10,
+					quantizer: (parseFloat(document.getElementById("quantizer").value) || 0),
 					forceGradients: document.getElementById("bruteForce").checked,
 					lossySmallGradients: true,
 					forceGradientsExtra: true,

@@ -1,11 +1,6 @@
-const BYTE_LENGTH = 8;
-const BYTE_POWER = Math.pow(2,BYTE_LENGTH);
-const BYTE_MAX_VAL = BYTE_POWER - 1;
-
-
 function rePlex(integer,base){
 	if(!base){
-		base = BYTE_LENGTH
+		base = 8
 	}
 	return new Array(base).fill(0).map(
 		(_,index) => ((integer & (1 << ((base - 1) - index))) > 0) + 0
@@ -105,28 +100,11 @@ function create_dip(colour1,colour2,direction,size){
 		let col = [];
 		for(let j=0;j<size;j++){
 			if(direction){
-				col.push(colour2 + (colour1 - colour2) * Math.abs(i - j)/(size - 1))
+				col.push(Math.round(colour2 + (colour1 - colour2) * Math.abs(i - j)/(size - 1)))
 			}
 			else{
-				col.push(colour2 + (colour1 - colour2) * Math.abs((size - i - 1) - j)/(size - 1))
+				col.push(Math.round(colour2 + (colour1 - colour2) * Math.abs((size - i - 1) - j)/(size - 1)))
 			}
-		}
-		data.push(col)
-	}
-	return data
-}
-
-function combine_dct(dct_array){
-	if(dct_array.length === 1){
-		return dct_array[0]
-	}
-	let data = [];
-	let size = dct_array[0].length;
-	for(let i=0;i<size;i++){
-		let col = [];
-		for(let j=0;j<size;j++){
-			let abo = dct_array.reduce((acc,val) => acc + val[i][j],0);
-			col.push(abo/dct_array.length)
 		}
 		data.push(col)
 	}
@@ -139,16 +117,16 @@ function create_dct(colour1,colour2,h_freq,v_freq,size){
 		let col = [];
 		for(let j=0;j<size;j++){
 			let abo = Math.abs(Math.cos(i*h_freq*Math.PI/(size-1)) + Math.cos(j*v_freq*Math.PI/(size-1)))/2;
-			col.push(colour1 * abo + colour2 * (1-abo))
+			col.push(Math.round(colour1 * abo + colour2 * (1-abo)))
 		}
 		data.push(col)
 	}
 	return data
 }
 
-function sample(chunck,arr){
+function sample_dct(chunck,h_freq,v_freq){
 	let size = chunck.length;
-	let dct = arr;
+	let dct = create_dct(0,1,h_freq,v_freq,size);
 	let sum_a = 0;
 	let count_a = 0;
 	let sum_b = 0;
@@ -166,12 +144,6 @@ function sample(chunck,arr){
 		}
 	}
 	return [Math.round(sum_a/count_a),Math.round(sum_b/count_b)]
-}
-
-function sample_dct(chunck,h_freq,v_freq){
-	let size = chunck.length;
-	let dct = create_dct(0,1,h_freq,v_freq,size);
-	return sample(chunck,dct);
 }
 
 function create_third(colour1,colour2,direction,fullness,size){
@@ -329,6 +301,8 @@ default_freqs = default_freqs.concat([
 	10000
 ])
 
+const TRESH = Math.E;
+
 function createHuffman(freqs){
 	let workList = [];
 	let sizeUsed = 0;
@@ -403,19 +377,21 @@ function buildBook(huffmanTree){
 
 
 const smallSymbolTable = [
+	"STOP",
 	"pixels",
 	"whole",
 	"vertical",
 	"horizontal",
-	"diagonal_NW",
-	"diagonal_NE",
 	"diagonal_solid_NW",
 	"diagonal_solid_NE",
 	"diagonal_solid_SW",
-	"diagonal_solid_SE"
+	"diagonal_solid_SE",
+	"diagonal_NW",
+	"diagonal_NE"
 ]
 
 const largeSymbolTable = [
+	"STOP",
 	"divide",
 	"whole",
 	"vertical",
@@ -448,10 +424,8 @@ const largeSymbolTable = [
 	"dct02",
 	"dct20",
 	"dct32",
-	"dct23"
+	"dct23",
 ]
-
-const quads = new Array(16);
 
 function encodeHoh(imageData,options,CBdata,CRdata){
 	let stats = {
@@ -470,7 +444,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		huffman_tables: 0,
 		blockUsage: [],
 		books: [],
-		freqs: []
+		colourBooks: []
 	}
 	let t0 = performance.now();
 	let hohData = [];
@@ -500,10 +474,12 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 
 	let encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
 
-	writeByteNative(width >> BYTE_LENGTH);
-	writeByteNative(width % BYTE_POWER);
-	writeByteNative(height >> BYTE_LENGTH);
-	writeByteNative(height % BYTE_POWER);
+	writeByteNative(width >> 8);
+	writeByteNative(width % 256);
+	writeByteNative(height >> 8);
+	writeByteNative(height % 256);
+
+	let currentEncode;
 
 	function grower(num){
 		return Math.max(num - num*num/512,1)
@@ -542,6 +518,56 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		return sumError/(chunck1.length * chunck1[0].length)
 	}
 
+	let simple_error_compare = function(chunck1,chunck2,offx,offy){
+		let maxError = 0;
+		let maxUp = 0;
+		let maxDown = 0;
+		for(let i=0;i<chunck1.length;i++){
+			for(let j=0;j<chunck1[i].length;j++){
+				if(offx + i < width && offy + j < height){
+					//maxError += Math.max(maxError,Math.abs(chunck2[i][j] - chunck1[i][j]))
+
+					let err = Math.pow(Math.abs(chunck2[i][j] - chunck1[i][j]),2);
+
+					if(err){
+						maxError += err + 1
+					}
+					maxUp = Math.max(maxUp,chunck1[i][j] - chunck2[i][j]);
+					maxDown = Math.min(maxDown,chunck1[i][j] - chunck2[i][j]);
+				}
+			}
+		}
+		if(maxUp > 127 || maxDown < -128){
+			return Number.MAX_VALUE
+		}
+		return maxError/(chunck1.length * chunck1.length)
+	}
+
+	let join_chunck = function(chunck1,chunck2){
+		let chunck3 = [];
+		for(let i=0;i<chunck1.length;i++){
+			let col = [];
+			for(let j=0;j<chunck1[i].length;j++){
+				col.push(chunck1[i][j] + chunck2[i][j])
+			}
+			chunck3.push(col)
+		}
+		return chunck3
+	}
+
+	let apply_chunck = function(chunck1,offx,offy){
+		for(let i=0;i<chunck1.length;i++){
+			for(let j=0;j<chunck1[i].length;j++){
+				if(offx + i < width && offy + j < height){
+					currentEncode[i + offx][j +  offy] += chunck1[i][j];
+					if(chunck1[i][j] !== Math.round(chunck1[i][j])){
+						throw "here"
+					}
+				}
+			}
+		}
+	}
+
 	function get_chunck(x,y,size){
 		let data = [];
 		for(let i=x;i<x + size;i++){
@@ -566,6 +592,30 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		return data
 	}
 
+	function get_chunck_encode(x,y,size){
+		let data = [];
+		for(let i=x;i<x + size;i++){
+			let col = [];
+			if(i >= width){
+				for(let j=y;j<y + size;j++){
+					col.push(currentEncode[width - 1][j] || currentEncode[width - 1][height - 1])
+				}
+			}
+			else{
+				for(let j=y;j<y + size;j++){
+					if(j >= height){
+						col.push(currentEncode[i][height - 1])
+					}
+					else{
+						col.push(currentEncode[i][j])
+					}
+				}
+			}
+			data.push(col)
+		}
+		return data
+	}
+
 	let find_average = function(chunck){
 		let sum = 0;
 		for(let i=0;i < chunck.length;i++){
@@ -574,6 +624,38 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 		}
 		return Math.round(sum/(chunck.length * chunck[0].length))
+	}
+
+	let chunck_diff = function(chunck1,chunck2){
+		let chunck3 = [];
+		for(let i=0;i<chunck1.length;i++){
+			let col = [];
+			for(let j=0;j<chunck1[i].length;j++){
+				col.push(chunck1[i][j] - chunck2[i][j])
+			}
+			chunck3.push(col)
+		}
+		return chunck3
+	}
+
+	let find_max = function(chunck){
+		let maxi = chunck[0][0];
+		for(let i=0;i < chunck.length;i++){
+			for(let j=0;j < chunck[i].length;j++){
+				maxi = Math.max(chunck[i][j],maxi)
+			}
+		}
+		return maxi
+	}
+
+	let find_min = function(chunck){
+		let mini = chunck[0][0];
+		for(let i=0;i < chunck.length;i++){
+			for(let j=0;j < chunck[i].length;j++){
+				mini = Math.min(chunck[i][j],mini)
+			}
+		}
+		return mini
 	}
 
 	if(options.quantizer === 0){
@@ -609,15 +691,17 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		return bitArray
 	}
 
-	let encode_channel = function(bitDepth){
-		const base_power = Math.pow(2,bitDepth);
-		const max_val = base_power - 1;
+	let encode_channel = function(){
+		currentEncode = [];
+		for(let i=0;i<width;i++){
+			currentEncode.push(new Array(height).fill(128))
+		}
 		let testMonochrome = function(){
 			for(let i=0;i<width;i++){
 				for(let j=0;j<height;j++){
 					if(
 						!(imageData[i][j] === 0
-						|| imageData[i][j] === max_val)
+						|| imageData[i][j] === 255)
 					){
 						return false
 					}
@@ -626,7 +710,8 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			return true
 		}
 
-		let monochrome = options.quantizer === 0 && testMonochrome();
+		//let monochrome = options.quantizer === 0 && testMonochrome();
+		let monochrome = false;
 		let blockQueue = [{x: 0,y:0, size: encoding_size}];
 		let smallSymbolFrequency = {};
 		smallSymbolTable.forEach(word => smallSymbolFrequency[word] = 0);
@@ -634,7 +719,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		let largeSymbolFrequency = {};
 		largeSymbolTable.forEach(word => largeSymbolFrequency[word] = 0);
 
-		let integerFrequency = new Array(base_power).fill(0);
+		let integerFrequency = new Array(256).fill(0);
 
 		let writeSymbol = function(symbol){
 			aritmetic_queue.push(symbol);
@@ -644,36 +729,41 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			aritmetic_queue.push([symbol]);
 			largeSymbolFrequency[symbol]++
 		}
-		let forige = 0;
 		let writeByte = function(integer){
+			if(integer < 0){
+				integer = 256 + integer
+			}
+			if(integer > 255){
+				console.log(integer)
+				throw "bada"
+			}
+			aritmetic_queue.push(integer);
+			integerFrequency[integer]++
+		}
+		/*let forige = 0;
+		let writeByte = function(integer){
+			if(integer < 0){
+				integer = 256 + integer
+			}
 			let encodedInteger = integer - forige;
 			forige = integer;
 			if(encodedInteger < 0){
-				encodedInteger += base_power
+				encodedInteger += 256
 			}
 			aritmetic_queue.push(encodedInteger);
 			integerFrequency[encodedInteger]++
-		}
-		if(monochrome){
+		}*/
+		/*if(monochrome){
 			writeByte = function(integer){
-				if(integer === forige){
-					aritmetic_queue.push(0);
-					integerFrequency[0]++
-				}
-				else{
-					aritmetic_queue.push(1);
-					integerFrequency[1]++;
-					forige = integer;
-				}
 				//if(integer === 0 || integer === 255){
-					//aritmetic_queue.push(integer);
-					//integerFrequency[integer]++
+					aritmetic_queue.push(integer);
+					integerFrequency[integer]++
 				//}
 				//else{
 					//throw "non-monochrome colour in monochrome mode"
 				//}
 			}
-		}
+		}*/
 
 		while(blockQueue.length){
 			let curr = blockQueue.pop();
@@ -683,109 +773,75 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			){
 				continue
 			}
-			if(
-				(
-					options.maxBlockSize && curr.size > options.maxBlockSize
-				)
-				|| (
-					options.quantizer === 0
-					&& curr.size > 2
-					&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y]
-					&& imageData[curr.x][curr.y] !== imageData[curr.x][curr.y + 1]
-					&& imageData[curr.x][curr.y + 1] !== imageData[curr.x + 1][curr.y]
-					&& imageData[curr.x][curr.y] !== imageData[curr.x + 1][curr.y + 1]
-				)
-			){
-				writeLargeSymbol("divide");
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
-				continue
-			}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
+			let chunck_e = get_chunck_encode(curr.x,curr.y,curr.size);
 			if(curr.size >= 4){
+				if(error_compare(chunck,chunck_e,curr.x,curr.y) <= options.quantizer){
+					writeLargeSymbol("STOP");
+					continue;
+				}
+				let diffi = chunck_diff(chunck,chunck_e);
+				let base_error = simple_error_compare(diffi,create_uniform(0,curr.size),curr.x,curr.y);
 				let errorQueue = [];
 				//let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + (curr.size)/16);
 				let localQuantizer = 100*options.quantizer/(curr.size);
 				//let localQuantizer = options.quantizer;
 
 				let average = find_average(chunck);
-				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
+
+				let minimum = find_min(diffi);
+				let maximum = find_max(diffi);
+
+				let woof = Math.round((maximum + minimum)/2);
+				if(curr.size === 4){
+					woof = diffi.flat().sort((a,b) => a - b)[diffi.length * diffi.length/2]
+				}
 				
-				errorQueue.push({
-					symbol: "whole",
-					error: avg_error,
-					colours: [average]
-				})
-				let mArr;
-				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
-					mArr = [
-						chunck[0][0],
-						chunck[0][0],
-						chunck[curr.size - 1][0],
-						chunck[curr.size - 1][0],
-
-						chunck[0][0],
-						chunck[0][0],
-						chunck[curr.size - 1][0],
-						chunck[curr.size - 1][0],
-
-						chunck[0][curr.size - 1],
-						chunck[0][curr.size - 1],
-						chunck[curr.size - 1][curr.size - 1],
-						chunck[curr.size - 1][curr.size - 1],
-
-						chunck[0][curr.size - 1],
-						chunck[0][curr.size - 1],
-						chunck[curr.size - 1][curr.size - 1],
-						chunck[curr.size - 1][curr.size - 1]
-					]
+				if(minimum === 0 && maximum === 0){
+					errorQueue.push({
+						symbol: "STOP",
+						error: 0,
+						colours: []
+					})
 				}
 				else{
-					mArr = [
-						find_average(get_chunck(curr.x,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y,curr.size/4)),
-
-						find_average(get_chunck(curr.x,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + curr.size/4,curr.size/4)),
-
-						find_average(get_chunck(curr.x,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-
-						find_average(get_chunck(curr.x,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4))
-					]
+					errorQueue.push({
+						symbol: "whole",
+						error: simple_error_compare(diffi,create_uniform(woof,curr.size),curr.x,curr.y),
+						colours: [woof]
+					})
+					errorQueue.push({
+						symbol: "whole",
+						error: simple_error_compare(diffi,create_uniform(woof + 1,curr.size),curr.x,curr.y),
+						colours: [woof + 1]
+					})
+					errorQueue.push({
+						symbol: "whole",
+						error: simple_error_compare(diffi,create_uniform(woof - 1,curr.size),curr.x,curr.y),
+						colours: [woof - 1]
+					})
 				}
+				let mArr_min = new Array(16).fill(999);
+				let mArr_max = new Array(16).fill(-999);
+				const kvartStork = curr.size/4;
+				for(let i=0;i<diffi.length;i++){
+					for(let j=0;j<diffi[0].length;j++){
+						mArr_min[Math.floor(i/kvartStork) + 4*Math.floor(j/kvartStork)] = Math.min(
+							mArr_min[Math.floor(i/kvartStork) + 4*Math.floor(j/kvartStork)],
+							diffi[i][j]
+						)
+						mArr_max[Math.floor(i/kvartStork) + 4*Math.floor(j/kvartStork)] = Math.max(
+							mArr_min[Math.floor(i/kvartStork) + 4*Math.floor(j/kvartStork)],
+							diffi[i][j]
+						)
+					}
+				}
+				let mArr = mArr_min.map((val,index) => Math.round((mArr_max[index] + val)/2));
 
 				let sharpener = function(a,b,resolver,symbol){
 					let error = resolver(a,b);
 					if(options.forceGradients){
-						let new_a = Math.min(a + 1,max_val);
+						let new_a = Math.min(a + 1,255);
 						let diff = 1;
 						if(a < b){
 							new_a = Math.max(a - 1,0);
@@ -795,15 +851,15 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						while(new_error < error){
 							a = new_a;
 							error = new_error;
-							new_a = Math.min(max_val,Math.max(a + diff,0));
+							new_a = Math.min(255,Math.max(a + diff,0));
 							new_error = resolver(new_a,b)
 						}
-						let new_b = Math.min(max_val,Math.max(b - diff,0));
+						let new_b = Math.min(255,Math.max(b - diff,0));
 						new_error = resolver(a,new_b);
 						while(new_error < error){
 							b = new_b;
 							error = new_error;
-							new_b = Math.min(max_val,Math.max(b - diff,0));
+							new_b = Math.min(255,Math.max(b - diff,0));
 							new_error = resolver(a,new_b)
 						}
 					}
@@ -814,8 +870,102 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					}
 				}
 
+				let top = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
+				let bottom = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
 
-				if(options.quantizer > 0){
+				let left = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
+				let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
+
+				let NW = mArr[0];
+				let SE = mArr[15];
+
+				let NE = mArr[3];
+				let SW = mArr[12];
+
+				let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
+				let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
+
+				let NE_s = Math.round((mArr[1] + mArr[2] + mArr[3] + mArr[6] + mArr[7] + mArr[11])/6);
+				let SW_s = Math.round((mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13] + mArr[14])/6);
+
+				let steep_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[12])/6);
+				let steep_SE = Math.round((mArr[3] + mArr[7] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
+
+				let calm_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[2] + mArr[3])/6);
+				let calm_SE = Math.round((mArr[12] + mArr[13] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
+
+				let steep_NE = Math.round((mArr[3] + mArr[2] + mArr[7] + mArr[6] + mArr[11] + mArr[15])/6);
+				let steep_SW = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13])/6);
+
+				let calm_NE = Math.round((mArr[0] + mArr[1] + mArr[6] + mArr[7] + mArr[2] + mArr[3])/6);
+				let calm_SW = Math.round((mArr[12] + mArr[13] + mArr[8] + mArr[9] + mArr[14] + mArr[15])/6);
+
+				errorQueue.push(sharpener(
+					top,
+					bottom,
+					(a,b) => simple_error_compare(diffi,create_vertical_gradient(a,b,curr.size),curr.x,curr.y),
+					"vertical"
+				))
+				errorQueue.push(sharpener(
+					left,
+					right,
+					(a,b) => simple_error_compare(diffi,create_horizontal_gradient(a,b,curr.size),curr.x,curr.y),
+					"horizontal"
+				))
+
+				errorQueue.push(sharpener(
+					NW,
+					SE,
+					(a,b) => simple_error_compare(diffi,create_diagonal_gradient(a,b,false,curr.size),curr.x,curr.y),
+					"diagonal_NW"
+				))
+				errorQueue.push(sharpener(
+					NE,
+					SW,
+					(a,b) => simple_error_compare(diffi,create_diagonal_gradient(a,b,true,curr.size),curr.x,curr.y),
+					"diagonal_NE"
+				))
+				errorQueue.push(sharpener(
+					NW_s,
+					SE_s,
+					(a,b) => simple_error_compare(diffi,create_diagonal_solid(a,b,false,curr.size),curr.x,curr.y),
+					"diagonal_solid_NW"
+				))
+				errorQueue.push(sharpener(
+					NE_s,
+					SW_s,
+					(a,b) => simple_error_compare(diffi,create_diagonal_solid(a,b,true,curr.size),curr.x,curr.y),
+					"diagonal_solid_NE"
+				))
+
+				errorQueue.push(sharpener(
+					steep_NW,
+					steep_SE,
+					(a,b) => simple_error_compare(diffi,create_odd_solid(a,b,false,true,curr.size),curr.x,curr.y),
+					"steep_NW"
+				))
+
+				errorQueue.push(sharpener(
+					calm_NW,
+					calm_SE,
+					(a,b) => simple_error_compare(diffi,create_odd_solid(a,b,false,false,curr.size),curr.x,curr.y),
+					"calm_NW"
+				))
+
+				errorQueue.push(sharpener(
+					steep_NE,
+					steep_SW,
+					(a,b) => simple_error_compare(diffi,create_odd_solid(a,b,true,true,curr.size),curr.x,curr.y),
+					"steep_NE"
+				))
+
+				errorQueue.push(sharpener(
+					calm_NE,
+					calm_SW,
+					(a,b) => simple_error_compare(diffi,create_odd_solid(a,b,true,false,curr.size),curr.x,curr.y),
+					"calm_NE"
+				))/**/
+
 					let left_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[9] + mArr[12] + mArr[13]
 						+ mArr[2]/2 + mArr[6]/2 + mArr[10]/2 + mArr[14]/2
@@ -839,244 +989,256 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						mArr[8] + mArr[9] + mArr[10] + mArr[11] + mArr[12] + mArr[13] + mArr[14] + mArr[15]
 						 + mArr[4]/2 + mArr[5]/2 + mArr[6]/2 + mArr[7]/2
 					)/10);
-					let top = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
-					let bottom = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
 
-					let left = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
-					let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
-
-					let NW = mArr[0];
-					let SE = mArr[15];
-
-					let NE = mArr[3];
-					let SW = mArr[12];
-
-					let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
-					let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
-
-					let NE_s = Math.round((mArr[1] + mArr[2] + mArr[3] + mArr[6] + mArr[7] + mArr[11])/6);
-					let SW_s = Math.round((mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13] + mArr[14])/6);
-
-					let steep_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[12])/6);
-					let steep_SE = Math.round((mArr[3] + mArr[7] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
-
-					let calm_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[2] + mArr[3])/6);
-					let calm_SE = Math.round((mArr[12] + mArr[13] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
-
-					let steep_NE = Math.round((mArr[3] + mArr[2] + mArr[7] + mArr[6] + mArr[11] + mArr[15])/6);
-					let steep_SW = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13])/6);
-
-					let calm_NE = Math.round((mArr[0] + mArr[1] + mArr[6] + mArr[7] + mArr[2] + mArr[3])/6);
-					let calm_SW = Math.round((mArr[12] + mArr[13] + mArr[8] + mArr[9] + mArr[14] + mArr[15])/6);
 					let corner_NW_SE = Math.round((mArr[0]*2 + mArr[1] + mArr[4] + mArr[11] + mArr[14] + mArr[15]*2)/8);
 					let skraa_NE_SW = Math.round((mArr[3] + mArr[6] + mArr[9] + mArr[12])/4);
 
 					let corner_NE_SW = Math.round((mArr[2] + mArr[3]*2 + mArr[7] + mArr[8] + mArr[12]*2 + mArr[13])/8);
 					let skraa_NW_SE = Math.round((mArr[0] + mArr[5] + mArr[10] + mArr[15])/4);
 
-
+					errorQueue.push(sharpener(
+						corner_NW_SE,
+						skraa_NE_SW,
+						(a,b) => simple_error_compare(diffi,create_dip(a,b,false,curr.size),curr.x,curr.y),
+						"dip_NW"
+					))
+					errorQueue.push(sharpener(
+						corner_NE_SW,
+						skraa_NW_SE,
+						(a,b) => simple_error_compare(diffi,create_dip(a,b,true,curr.size),curr.x,curr.y),
+						"dip_NE"
+					))/**/
+					/*errorQueue.push(sharpener(
+						left_third_large,
+						right_third_small,
+						(a,b) => simple_error_compare(diffi,create_third(a,b,false,true,curr.size),curr.x,curr.y),
+						"horizontal_large_third"
+					))
+					errorQueue.push(sharpener(
+						left_third_small,
+						right_third_large,
+						(a,b) => simple_error_compare(diffi,create_third(a,b,false,false,curr.size),curr.x,curr.y),
+						"horizontal_third"
+					))
+					errorQueue.push(sharpener(
+						top_third_large,
+						bottom_third_small,
+						(a,b) => simple_error_compare(diffi,create_third(a,b,true,true,curr.size),curr.x,curr.y),
+						"vertical_large_third"
+					))
+					errorQueue.push(sharpener(
+						top_third_small,
+						bottom_third_large,
+						(a,b) => simple_error_compare(diffi,create_third(a,b,true,false,curr.size),curr.x,curr.y),
+						"vertical_third"
+					))*/
+					if(options.useDCT){
 					let middle_vertical = Math.round((mArr[1] + mArr[2] + mArr[5] + mArr[6] + mArr[9] + mArr[10] + mArr[13] + mArr[14])/8);
 					let middle_horizontal = Math.round((mArr[4] + mArr[8] + mArr[5] + mArr[6] + mArr[9] + mArr[10] + mArr[7] + mArr[11])/8);
-
-					errorQueue.push(sharpener(
-						top,
-						bottom,
-						(a,b) => error_compare(chunck,create_vertical_gradient(a,b,curr.size),curr.x,curr.y),
-						"vertical"
-					))
-					errorQueue.push(sharpener(
-						left,
-						right,
-						(a,b) => error_compare(chunck,create_horizontal_gradient(a,b,curr.size),curr.x,curr.y),
-						"horizontal"
-					))
-
-					errorQueue.push(sharpener(
-						NW,
-						SE,
-						(a,b) => error_compare(chunck,create_diagonal_gradient(a,b,false,curr.size),curr.x,curr.y),
-						"diagonal_NW"
-					))
-					errorQueue.push(sharpener(
-						NE,
-						SW,
-						(a,b) => error_compare(chunck,create_diagonal_gradient(a,b,true,curr.size),curr.x,curr.y),
-						"diagonal_NE"
-					))
-
-					errorQueue.push(sharpener(
-						NW_s,
-						SE_s,
-						(a,b) => error_compare(chunck,create_diagonal_solid(a,b,false,curr.size),curr.x,curr.y),
-						"diagonal_solid_NW"
-					))
-					errorQueue.push(sharpener(
-						NE_s,
-						SW_s,
-						(a,b) => error_compare(chunck,create_diagonal_solid(a,b,true,curr.size),curr.x,curr.y),
-						"diagonal_solid_NE"
-					))
-
-					errorQueue.push(sharpener(
-						steep_NW,
-						steep_SE,
-						(a,b) => error_compare(chunck,create_odd_solid(a,b,false,true,curr.size),curr.x,curr.y),
-						"steep_NW"
-					))
-
-					errorQueue.push(sharpener(
-						calm_NW,
-						calm_SE,
-						(a,b) => error_compare(chunck,create_odd_solid(a,b,false,false,curr.size),curr.x,curr.y),
-						"calm_NW"
-					))
-
-					errorQueue.push(sharpener(
-						steep_NE,
-						steep_SW,
-						(a,b) => error_compare(chunck,create_odd_solid(a,b,true,true,curr.size),curr.x,curr.y),
-						"steep_NE"
-					))
-
-					errorQueue.push(sharpener(
-						calm_NE,
-						calm_SW,
-						(a,b) => error_compare(chunck,create_odd_solid(a,b,true,false,curr.size),curr.x,curr.y),
-						"calm_NE"
-					))
-					if(options.useDCT){
 						errorQueue.push(sharpener(
 							top,
 							bottom,
-							(a,b) => error_compare(chunck,create_dct(a,b,0,1,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,0,1,curr.size),curr.x,curr.y),
 							"dct01"
 						))
 						errorQueue.push(sharpener(
 							left,
 							right,
-							(a,b) => error_compare(chunck,create_dct(a,b,1,0,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,1,0,curr.size),curr.x,curr.y),
 							"dct10"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,0,3),
-							(a,b) => error_compare(chunck,create_dct(a,b,0,3,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,0,3),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,0,3,curr.size),curr.x,curr.y),
 							"dct03"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,0),
-							(a,b) => error_compare(chunck,create_dct(a,b,3,0,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,3,0),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,3,0,curr.size),curr.x,curr.y),
 							"dct30"
 						))
 
 						errorQueue.push(sharpener(
 							top,
 							middle_horizontal,
-							(a,b) => error_compare(chunck,create_dct(a,b,0,2,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,0,2,curr.size),curr.x,curr.y),
 							"dct02"
 						))
 						errorQueue.push(sharpener(
 							left,
 							middle_vertical,
-							(a,b) => error_compare(chunck,create_dct(a,b,2,0,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,2,0,curr.size),curr.x,curr.y),
 							"dct20"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,2,3),
-							(a,b) => error_compare(chunck,create_dct(a,b,2,3,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,2,3),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,2,3,curr.size),curr.x,curr.y),
 							"dct23"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,2),
-							(a,b) => error_compare(chunck,create_dct(a,b,3,2,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,3,2),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,3,2,curr.size),curr.x,curr.y),
 							"dct32"
 						))
 
 						errorQueue.push(sharpener(
 							corner_NW_SE,
 							corner_NE_SW,
-							(a,b) => error_compare(chunck,create_dct(a,b,1,1,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,1,1,curr.size),curr.x,curr.y),
 							"dct11"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,2,2),
-							(a,b) => error_compare(chunck,create_dct(a,b,2,2,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,2,2),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,2,2,curr.size),curr.x,curr.y),
 							"dct22"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,3),
-							(a,b) => error_compare(chunck,create_dct(a,b,3,3,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,3,3),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,3,3,curr.size),curr.x,curr.y),
 							"dct33"
 						))
 						errorQueue.push(sharpener(
 							corner_NW_SE,
 							corner_NE_SW,
-							(a,b) => error_compare(chunck,create_dct(a,b,1,2,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,1,2,curr.size),curr.x,curr.y),
 							"dct12"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,1,3),
-							(a,b) => error_compare(chunck,create_dct(a,b,1,3,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,1,3),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,1,3,curr.size),curr.x,curr.y),
 							"dct13"
 						))
 						errorQueue.push(sharpener(
 							corner_NW_SE,
 							corner_NE_SW,
-							(a,b) => error_compare(chunck,create_dct(a,b,2,1,curr.size),curr.x,curr.y),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,2,1,curr.size),curr.x,curr.y),
 							"dct21"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,1),
-							(a,b) => error_compare(chunck,create_dct(a,b,3,1,curr.size),curr.x,curr.y),
+							...sample_dct(diffi,3,1),
+							(a,b) => simple_error_compare(diffi,create_dct(a,b,3,1,curr.size),curr.x,curr.y),
 							"dct31"
 						))
 					}
-					errorQueue.push(sharpener(
-						corner_NW_SE,
-						skraa_NE_SW,
-						(a,b) => error_compare(chunck,create_dip(a,b,false,curr.size),curr.x,curr.y),
-						"dip_NW"
-					))
-					errorQueue.push(sharpener(
-						corner_NE_SW,
-						skraa_NW_SE,
-						(a,b) => error_compare(chunck,create_dip(a,b,true,curr.size),curr.x,curr.y),
-						"dip_NE"
-					))
-					errorQueue.push(sharpener(
-						left_third_large,
-						right_third_small,
-						(a,b) => error_compare(chunck,create_third(a,b,false,true,curr.size),curr.x,curr.y),
-						"horizontal_large_third"
-					))
-					errorQueue.push(sharpener(
-						left_third_small,
-						right_third_large,
-						(a,b) => error_compare(chunck,create_third(a,b,false,false,curr.size),curr.x,curr.y),
-						"horizontal_third"
-					))
-					errorQueue.push(sharpener(
-						top_third_large,
-						bottom_third_small,
-						(a,b) => error_compare(chunck,create_third(a,b,true,true,curr.size),curr.x,curr.y),
-						"vertical_large_third"
-					))
-					errorQueue.push(sharpener(
-						top_third_small,
-						bottom_third_large,
-						(a,b) => error_compare(chunck,create_third(a,b,true,false,curr.size),curr.x,curr.y),
-						"vertical_third"
-					))
+
+				/*
+
+
+				if(options.quantizer > 0){
+
+
+
+					let middle_vertical = Math.round((mArr[1] + mArr[2] + mArr[5] + mArr[6] + mArr[9] + mArr[10] + mArr[13] + mArr[14])/8);
+					let middle_horizontal = Math.round((mArr[4] + mArr[8] + mArr[5] + mArr[6] + mArr[9] + mArr[10] + mArr[7] + mArr[11])/8);
+
 				}
 
-
+				*/
 				errorQueue.sort((a,b) => a.error - b.error);
-				if(errorQueue[0].error <= localQuantizer){
-					writeLargeSymbol(errorQueue[0].symbol);
-					errorQueue[0].colours.forEach(colour => {
-						writeByte(colour);
-					})
+				if(true || (errorQueue[0].error <= localQuantizer)){
+					if(errorQueue[0].error > base_error/TRESH){
+						writeLargeSymbol("divide");
+					}
+					else{
+						writeLargeSymbol(errorQueue[0].symbol);
+						errorQueue[0].colours.forEach(colour => {
+							try{
+								writeByte(colour);
+							}
+							catch(e){
+								throw "lars"
+							}
+						})
+					}
+try{
+					if(errorQueue[0].error > base_error/TRESH){
+						
+					}
+					else if(errorQueue[0].symbol === "whole"){
+						apply_chunck(create_uniform(errorQueue[0].colours[0],curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "vertical"){
+						apply_chunck(create_vertical_gradient(errorQueue[0].colours[0],errorQueue[0].colours[1],curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "horizontal"){
+						apply_chunck(create_horizontal_gradient(errorQueue[0].colours[0],errorQueue[0].colours[1],curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "diagonal_NW"){
+						apply_chunck(create_diagonal_gradient(errorQueue[0].colours[0],errorQueue[0].colours[1],false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "diagonal_NE"){
+						apply_chunck(create_diagonal_gradient(errorQueue[0].colours[0],errorQueue[0].colours[1],true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "diagonal_solid_NW"){
+						apply_chunck(create_diagonal_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "diagonal_solid_NE"){
+						apply_chunck(create_diagonal_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "steep_NW"){
+						apply_chunck(create_odd_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],false,true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "calm_NW"){
+						apply_chunck(create_odd_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],false,false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "steep_NE"){
+						apply_chunck(create_odd_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],true,true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "calm_NE"){
+						apply_chunck(create_odd_solid(errorQueue[0].colours[0],errorQueue[0].colours[1],true,false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "dip_NW"){
+						apply_chunck(create_dip(errorQueue[0].colours[0],errorQueue[0].colours[1],false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "dip_NE"){
+						apply_chunck(create_dip(errorQueue[0].colours[0],errorQueue[0].colours[1],true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "horizontal_large_third"){
+						apply_chunck(create_third(errorQueue[0].colours[0],errorQueue[0].colours[1],false,true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "horizontal_large"){
+						apply_chunck(create_third(errorQueue[0].colours[0],errorQueue[0].colours[1],false,false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "vertical_large_third"){
+						apply_chunck(create_third(errorQueue[0].colours[0],errorQueue[0].colours[1],true,true,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol === "vertical_third"){
+						apply_chunck(create_third(errorQueue[0].colours[0],errorQueue[0].colours[1],true,false,curr.size),curr.x,curr.y)
+					}
+					else if(errorQueue[0].symbol.substring(0,3) === "dct"){
+						let h_freq = parseInt(errorQueue[0].symbol[3]);
+						let v_freq = parseInt(errorQueue[0].symbol[4]);
+						apply_chunck(create_dct(errorQueue[0].colours[0],errorQueue[0].colours[1],h_freq,v_freq,curr.size),curr.x,curr.y)
+					}
+}
+catch(e){
+	console.log(errorQueue[0].symbol,errorQueue[0].colours);
+	throw e
+}
+					if(errorQueue[0].symbol !== "STOP"){
+						blockQueue.push({
+							x: curr.x,
+							y: curr.y,
+							size: curr.size/2
+						})
+						blockQueue.push({
+							x: curr.x + curr.size/2,
+							y: curr.y,
+							size: curr.size/2
+						})
+						blockQueue.push({
+							x: curr.x + curr.size/2,
+							y: curr.y + curr.size/2,
+							size: curr.size/2
+						})
+						blockQueue.push({
+							x: curr.x,
+							y: curr.y + curr.size/2,
+							size: curr.size/2
+						})
+					}
 					continue
-				}
+				}/*
 				writeLargeSymbol("divide");
 				blockQueue.push({
 					x: curr.x,
@@ -1098,106 +1260,158 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size/2,
 					size: curr.size/2
 				})
-				continue		}
+				continue*/
+			}
 			if(curr.size === 2){
-				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
-				let wholeError = error_compare([[avg,avg],[avg,avg]],chunck,0,0);
+				let diffi = chunck_diff(chunck,chunck_e);
+	if(false/*diffi.flat().filter(e => [-4,-3,-2,-1,0,1,2,3,4].includes(e)).length === 0*/){
+				let avg = Math.round((
+					chunck[0][0] - chunck_e[0][0]
+					+ chunck[1][0] - chunck_e[1][0]
+					+ chunck[0][1] - chunck_e[0][1]
+					+ chunck[1][1] - chunck_e[1][1]
+				)/4);
+				let wholeError = simple_error_compare(
+					join_chunck(chunck_e,[[avg,avg],[avg,avg]]),
+					chunck,0,0);
 				if(
 					wholeError === 0
 				){
-					writeSymbol("whole");
-					writeByte(chunck[0][0]);
-					stats.whole++;
-					continue
+					if(false && avg === 0){
+						writeSymbol("STOP");
+						continue
+					}
+					else{
+						writeSymbol("whole");
+						writeByte(avg);
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
+						stats.whole++;
+						continue
+					}
 				}
 				if(
-					chunck[0][0] === chunck[1][0]
-					&& chunck[0][1] === chunck[1][1]
+					(chunck[0][0] - chunck_e[0][0]) === (chunck[1][0]  - chunck_e[1][0])
+					&& (chunck[0][1] - chunck_e[0][1]) === (chunck[1][1] - chunck_e[1][1])
 				){
 					writeSymbol("vertical");
-					writeByte(chunck[0][0]);
+					writeByte(chunck[1][0]  - chunck_e[1][0]);
 					if(!monochrome){
-						writeByte(chunck[0][1])
+						writeByte(chunck[1][1] - chunck_e[1][1])
 					}
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					stats.small_gradients++;
 					continue
 				}
 				if(
-					chunck[0][0] === chunck[0][1]
-					&& chunck[1][0] === chunck[1][1]
+					(chunck[0][0] - chunck_e[0][0]) === (chunck[0][1]  - chunck_e[0][1])
+					&& (chunck[1][0] - chunck_e[1][0]) === (chunck[1][1] - chunck_e[1][1])
 				){
 					writeSymbol("horizontal");
-					writeByte(chunck[0][0]);
+					writeByte(chunck[0][0] - chunck_e[0][0]);
 					if(!monochrome){
-						writeByte(chunck[1][1])
+						writeByte(chunck[1][0] - chunck_e[1][0])
 					}
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					stats.small_gradients++;
 					continue
 				}
-				let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
+				let dia1_err = simple_error_compare(create_diagonal_gradient((chunck[0][0] - chunck_e[0][0] ),(chunck[1][1] - chunck_e[1][1]),false,2),diffi,0,0);
 				if(dia1_err === 0){
 					writeSymbol("diagonal_NW");
-					writeByte(chunck[0][0]);
-					writeByte(chunck[1][1]);
+					writeByte(chunck[0][0] - chunck_e[0][0]);
+					writeByte(chunck[1][1] - chunck_e[1][1]);
 					stats.small_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
 				}
-				let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
+				let dia2_err = simple_error_compare(create_diagonal_gradient(chunck[1][0] - chunck_e[1][0],chunck[0][1] - chunck_e[0][1],true,2),diffi,0,0);
 				if(dia2_err === 0){
 					writeSymbol("diagonal_NE");
-					writeByte(chunck[1][0]);
-					writeByte(chunck[0][1]);
+					writeByte(chunck[1][0] - chunck_e[1][0]);
+					writeByte(chunck[0][1] - chunck_e[0][1]);
 					stats.small_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
 				}
 				if(
-					chunck[0][0] === chunck[1][0]
-					&& chunck[0][0] === chunck[0][1]
+					(chunck[0][0] - chunck_e[0][0]) === (chunck[1][0] - chunck_e[1][0])
+					&& (chunck[0][0] - chunck_e[0][0]) === (chunck[0][1] - chunck_e[0][1])
 				){
 					writeSymbol("diagonal_solid_NW");
-					writeByte(chunck[0][0]);
+					writeByte(chunck[0][0] - chunck_e[0][0]);
 					if(!monochrome){
-						writeByte(chunck[1][1])
+						writeByte(chunck[1][1] - chunck_e[1][1])
 					}
 					stats.small_solid_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
 				}
 				if(
-					chunck[0][0] === chunck[1][0]
-					&& chunck[0][0] === chunck[1][1]
+					(chunck[0][0] - chunck_e[0][0]) === (chunck[1][0] - chunck_e[1][0])
+					&& (chunck[0][0] - chunck_e[0][0]) === (chunck[1][1] - chunck_e[1][1])
 				){
 					writeSymbol("diagonal_solid_NE");
-					writeByte(chunck[0][0]);
+					writeByte(chunck[0][0] - chunck_e[0][0]);
 					if(!monochrome){
-						writeByte(chunck[0][1])
+						writeByte(chunck[0][1] - chunck_e[0][1])
 					}
 					stats.small_solid_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
 				}
 				if(
-					chunck[0][1] === chunck[1][1]
-					&& chunck[1][1] === chunck[1][0]
+					(chunck[0][1] -  chunck_e[0][1]) === (chunck[1][1] - chunck_e[1][1])
+					&& (chunck[1][1] - chunck_e[1][1]) === (chunck[1][0] - chunck_e[1][0])
 				){
 					writeSymbol("diagonal_solid_SE");
-					writeByte(chunck[0][0]);
+					writeByte(chunck[0][0] - chunck_e[0][0]);
 					if(!monochrome){
-						writeByte(chunck[1][1])
+						writeByte(chunck[1][1] - chunck_e[1][1])
 					}
 					stats.small_solid_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
 				}
 				if(
-					chunck[0][1] === chunck[1][1]
-					&& chunck[0][0] === chunck[0][1]
+					(chunck[0][1] - chunck_e[0][1]) === (chunck[1][1] - chunck_e[1][1])
+					&& (chunck[0][0] - chunck_e[0][0]) === (chunck[0][1] - chunck_e[0][1])
 				){
 					writeSymbol("diagonal_solid_SW");
-					writeByte(chunck[1][0]);
+					writeByte(chunck[1][0] - chunck_e[1][0]);
 					if(!monochrome){
-						writeByte(chunck[0][1])
+						writeByte(chunck[0][1] - chunck_e[0][1])
 					}
 					stats.small_solid_diagonals++;
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
 					continue
-				}	
+				}
 				if(options.lossySmallGradients && options.quantizer){
 
 					let errorQueue = [];
@@ -1207,9 +1421,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						colours: [avg]
 					})
 
-					let upper_avg = Math.round((chunck[0][0] + chunck[1][0])/2);
-					let lower_avg = Math.round((chunck[0][1] + chunck[1][1])/2);
-					let left_avg = Math.round((chunck[0][0] + chunck[0][1])/2);
+					let upper_avg = Math.round((diffi[0][0] + diffi[1][0])/2);
+					let lower_avg = Math.round((diffi[0][1] + diffi[1][1])/2);
+					/*let left_avg = Math.round((chunck[0][0] + chunck[0][1])/2);
 					let right_avg = Math.round((chunck[1][0] + chunck[1][1])/2);
 					let NW_avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1])/3);
 					let NE_avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[1][1])/3);
@@ -1223,14 +1437,15 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					let solid2Error = error_compare([[NE_avg,chunck[0][1]],[NE_avg,NE_avg]],chunck,0,0);
 
 					let weird1Error = error_compare([[chunck[0][0],SE_avg],[SE_avg,SE_avg]],chunck,0,0);
-					let weird2Error = error_compare([[SW_avg,SW_avg],[chunck[1][0],SW_avg]],chunck,0,0);
+					let weird2Error = error_compare([[SW_avg,SW_avg],[chunck[1][0],SW_avg]],chunck,0,0);*/
 
-					errorQueue.push({
-						symbol: "vertical",
-						error: lossyVerticalError,
-						colours: [upper_avg,lower_avg]
-					})
-					errorQueue.push({
+					errorQueue.push(sharpener(
+						upper_avg,
+						lower_avg,
+						(a,b) => simple_error_compare(diffi,create_vertical_gradient(a,b,curr.size),curr.x,curr.y),
+						"vertical"
+					))
+					/*errorQueue.push({
 						symbol: "horizontal",
 						error: lossyHorizontalError,
 						colours: [left_avg,right_avg]
@@ -1264,7 +1479,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						symbol: "diagonal_NE",
 						error: dia2_err,
 						colours: [chunck[1][0],chunck[0][1]]
-					})
+					})*/
 					errorQueue.sort((a,b) => a.error - b.error);
 					if(errorQueue[0].error <= options.quantizer){
 						writeSymbol(errorQueue[0].symbol);
@@ -1274,12 +1489,32 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						continue
 					}
 				}
+}
 				writeSymbol("pixels");
 				stats.single += 4;
-				writeByte(chunck[0][0]);
-				writeByte(chunck[1][0]);
-				writeByte(chunck[1][1]);
-				writeByte(chunck[0][1]);
+if(Math.max(chunck[0][0] - chunck_e[0][0],chunck[1][0] - chunck_e[1][0],chunck[1][1] - chunck_e[1][1],chunck[0][1] - chunck_e[0][1]) > 127){
+	throw "too large"
+}
+if(Math.min(chunck[0][0] - chunck_e[0][0],chunck[1][0] - chunck_e[1][0],chunck[1][1] - chunck_e[1][1],chunck[0][1] - chunck_e[0][1]) < -128){
+	throw "too small"
+}
+try{
+				writeByte(chunck[0][0] - chunck_e[0][0]);
+				writeByte(chunck[1][0] - chunck_e[1][0]);
+				writeByte(chunck[1][1] - chunck_e[1][1]);
+				writeByte(chunck[0][1] - chunck_e[0][1]);
+				currentEncode[curr.x + 0][curr.y + 0] += (chunck[0][0] - chunck_e[0][0]);
+				currentEncode[curr.x + 1][curr.y + 0] += (chunck[1][0] - chunck_e[1][0]);
+				currentEncode[curr.x + 1][curr.y + 1] += (chunck[1][1] - chunck_e[1][1]);
+				currentEncode[curr.x + 0][curr.y + 1] += (chunck[0][1] - chunck_e[0][1]);
+}
+catch(e){
+		console.log(chunck[0][0],chunck_e[0][0]);
+		console.log(chunck[1][0],chunck_e[1][0]);
+		console.log(chunck[1][1],chunck_e[1][1]);
+		console.log(chunck[0][1],chunck_e[0][1]);
+		throw "mmmmm"
+}
 			}
 		}
 		let largeHuffman = createHuffman(largeSymbolFrequency);
@@ -1288,9 +1523,10 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		let smallHuffman = createHuffman(smallSymbolFrequency);
 		let smallSymbolBook = buildBook(smallHuffman);
 
+		let optionalStats = {};
+
 		let colourHuffman = createHuffman(integerFrequency);
 		let colourBook = buildBook(colourHuffman);
-		console.log("clb",colourBook);
 
 		let size1 = hohData.length;
 
@@ -1312,9 +1548,8 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 		},0)
 
-		/*console.log("ifr",integerFrequency);
-		console.log("clb",colourBook);
-		console.log("pre-usage",preUsage);
+		console.log("ifr",integerFrequency);
+		/*console.log("pre-usage",preUsage);
 		console.log("post-usage",postUsage);*/
 
 		let colourBuffer = encodeHuffTable(colourHuffman);
@@ -1325,7 +1560,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		console.log("default",defaultUsage);
 		console.log(monochrome,"total",colourBuffer.length + postUsage,colourBook);
 		console.log("intf",integerFrequency);*/
-		stats.freqs.push(integerFrequency);
 
 		stats.blockUsage.push({small: smallSymbolFrequency,large: largeSymbolFrequency});
 
@@ -1334,56 +1568,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			writeBitNative(0);
 			writeBitNative(1);
 			mode = "monochrome";
-			console.log("using monochrome");
-
-			let powerMode = 0;
-			let waitingIndex = 0;
-
-			let short_f_table = new Array(16).fill(0);
-
-			aritmetic_queue.forEach((waiting,index) => {
-				if(Array.isArray(waiting)){
-				}
-				else if(isFinite(waiting)){
-					if(powerMode === 0){
-						waitingIndex = index;
-						if(waiting === 1){
-							aritmetic_queue[waitingIndex] = 8
-						}
-						powerMode++
-					}
-					else if(powerMode === 1){
-						if(waiting === 1){
-							aritmetic_queue[waitingIndex] += 4
-						}
-						aritmetic_queue[index] = -1;
-						powerMode++
-					}
-					else if(powerMode === 2){
-						if(waiting === 1){
-							aritmetic_queue[waitingIndex] += 2
-						}
-						aritmetic_queue[index] = -1;
-						powerMode++
-					}
-					else if(powerMode === 3){
-						if(waiting === 1){
-							aritmetic_queue[waitingIndex] += 1
-						}
-						aritmetic_queue[index] = -1;
-						short_f_table[aritmetic_queue[waitingIndex]]++;
-						powerMode = 0
-					}
-				}
-			})
-			if(powerMode){
-				short_f_table[aritmetic_queue[waitingIndex]]++;
-			}
-			
-			colourHuffman = createHuffman(short_f_table);
-			colourBook = buildBook(colourHuffman);
-			console.log(colourBook);
-			colourBuffer = encodeHuffTable(colourHuffman,quads);
+			console.log("using monochrome")
 		}
 		else if(defaultUsage < colourBuffer.length + postUsage){
 			writeBitNative(1);
@@ -1401,9 +1586,6 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		if(mode === "huffman"){
 			bitBuffer = bitBuffer.concat(colourBuffer)
 		}
-		else if(mode === "monochrome"){
-			console.log("ncc",colourBuffer.length)
-		}
 		while(bitBuffer.length > 7){
 			hohData.push(dePlex(bitBuffer.splice(0,8)))
 		}
@@ -1411,41 +1593,72 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		stats.huffman_tables += hohData.length - size1;
 
 		stats.books.push({small: smallSymbolBook,large: largeSymbolBook});
+		stats.colourBooks.push(colourBook);
+
+		let largeSymbolNumber = 0;
+		let symbolNumber = 0;
+		let integerNumber = 0;
 
 		aritmetic_queue.forEach(waiting => {
 			if(Array.isArray(waiting)){
-				bitBuffer.push(...largeSymbolBook[waiting[0]])
+				bitBuffer.push(...largeSymbolBook[waiting[0]]);
+				largeSymbolNumber++
 			}
 			else if(isFinite(waiting)){
 				if(mode === "huffman"){
-					bitBuffer.push(...colourBook[waiting]);
+					try{
+						bitBuffer.push(...colourBook[waiting]);
+					}
+					catch(e){
+						console.log(waiting);
+						throw "bad"
+					}
 				}
 				else if(mode === "default"){
 					bitBuffer.push(...default_book[waiting]);
 				}
 				else{
-					/*if(waiting === 0){
+					if(waiting === 0){
 						bitBuffer.push(0)
 					}
 					else{
 						bitBuffer.push(1)
-					}*/
-					if(waiting !== -1){
-						bitBuffer.push(...colourBook[waiting])
 					}
 				}
+				integerNumber++
 			}
 			else{
-				bitBuffer.push(...smallSymbolBook[waiting])
+				bitBuffer.push(...smallSymbolBook[waiting]);
+				symbolNumber++
 			}
 			while(bitBuffer.length > 7){
 				hohData.push(dePlex(bitBuffer.splice(0,8)))
 			}
 		});
-		aritmetic_queue = []
+		aritmetic_queue = [];
+		//console.log("largeSymbols",largeSymbolNumber);
+		//console.log("symbols",symbolNumber);
+		//console.log("colours",integerNumber);
+		let maxi = 0;
+		let mini = 0;
+		let fails = 0;
+		for(let i=0;i<currentEncode.length;i++){
+			for(let j=0;j<currentEncode[0].length;j++){
+				maxi = Math.max(maxi,currentEncode[i][j]);
+				mini = Math.min(mini,currentEncode[i][j]);
+				if(Math.abs(currentEncode[i][j] - imageData[i][j]) > 0){
+					//console.log(currentEncode[i][j],imageData[i][j])
+					//throw "failure";
+					fails++;
+				}
+			}
+		}
+		console.log("fails: ",fails);
+		console.log("maxi_e",maxi);
+		console.log("mini_e",mini);
 	}
 
-	encode_channel(8);
+	encode_channel();
 
 	let size1 = hohData.length;
 
@@ -1453,9 +1666,10 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		options.quantizer = options.subSampling
 	}
 	imageData = CBdata;
-	encode_channel(8);
+	encode_channel();
 	imageData = CRdata;
-	encode_channel(8);
+	encode_channel();
+	console.log(CBdata);
 
 	while(bitBuffer.length){
 		writeBitNative(0)
@@ -1540,11 +1754,11 @@ function decodeHoh(hohData){
 		return readNode()
 	}
 
-	let decode_channel = function(bitDepth){
-	
+	let decode_channel = function(){
+		console.log("-------")
 		let imageData = [];
 		for(let i=0;i<width;i++){
-			imageData.push(new Array(height).fill(max_val))
+			imageData.push(new Array(height).fill(128))
 		}
 
 		let e_mode_1 = readBit();
@@ -1591,8 +1805,6 @@ function decodeHoh(hohData){
 			return head.symbol
 		}
 
-		let forige = 0;
-
 		let readColour = function(){
 			let head = colourHuffman;
 			while(head.isInternal){
@@ -1603,44 +1815,22 @@ function decodeHoh(hohData){
 					head = head.left
 				}
 			}
-			let decodedInteger = (parseInt(head.symbol) + forige) % base_power;
-			forige = decodedInteger;
-			return decodedInteger
+			let integer = parseInt(head.symbol)
+			if(integer < 128){
+				return integer
+			}
+			else{
+				return integer - 256
+			}
 		}
-
-		let cl_buffer = [];
-
 		if(monochrome){
-			/*readColour = function(){
-				let colourBit = readBit();
-				if(colourBit === 0){
-					return forige
-				}
-				else{
-					if(forige === 0){
-						forige = 255;
-						return 255
-					}
-					else{
-						forige = 0
-						return 0
-					}
-				}
-			}*/
 			readColour = function(){
 				let colourBit = readBit();
-				if(colourBit === 0){
-					return forige
+				if(colourBit){
+					return 255
 				}
 				else{
-					if(forige === 0){
-						forige = max_val;
-						return max_val
-					}
-					else{
-						forige = 0
-						return 0
-					}
+					return 0
 				}
 			}
 		}
@@ -1650,23 +1840,23 @@ function decodeHoh(hohData){
 		let write2x2 = function(curr,a,b,c,d){
 			if(curr.x + 1 < width){
 				if(curr.y + 1 < height){
-					imageData[curr.x][curr.y] = a;
-					imageData[curr.x + 1][curr.y] = b;
-					imageData[curr.x + 1][curr.y + 1] = c;
-					imageData[curr.x][curr.y + 1] = d;
+					imageData[curr.x][curr.y] += a;
+					imageData[curr.x + 1][curr.y] += b;
+					imageData[curr.x + 1][curr.y + 1] += c;
+					imageData[curr.x][curr.y + 1] += d;
 				}
 				else{
-					imageData[curr.x][curr.y] = a;
-					imageData[curr.x + 1][curr.y] = b;
+					imageData[curr.x][curr.y] += a;
+					imageData[curr.x + 1][curr.y] += b;
 				}
 			}
 			else{
 				if(curr.y + 1 < height){
-					imageData[curr.x][curr.y] = a;
-					imageData[curr.x][curr.y + 1] = d;
+					imageData[curr.x][curr.y] += a;
+					imageData[curr.x][curr.y + 1] += d;
 				}
 				else{
-					imageData[curr.x][curr.y] = a;
+					imageData[curr.x][curr.y] += a;
 				}
 			}
 		}
@@ -1683,69 +1873,57 @@ function decodeHoh(hohData){
 			}
 			if(curr.size >= 4){
 				let instruction = readLargeSymbol();
-				if(instruction === "divide"){
-					blockQueue.push({
-						x: curr.x,
-						y: curr.y,
-						size: curr.size/2
-					})
-					blockQueue.push({
-						x: curr.x + curr.size/2,
-						y: curr.y,
-						size: curr.size/2
-					})
-					blockQueue.push({
-						x: curr.x + curr.size/2,
-						y: curr.y + curr.size/2,
-						size: curr.size/2
-					})
-					blockQueue.push({
-						x: curr.x,
-						y: curr.y + curr.size/2,
-						size: curr.size/2
-					})
+				if(instruction === "STOP"){
+					continue
+				}
+				else if(instruction === "divide"){
+
 				}
 				else if(instruction === "whole"){
 					let solid = readColour();
 					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
 						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
-							imageData[i][j] = solid
+							imageData[i][j] += solid
 						}
 					}
 				}
 				else if(instruction === "horizontal"){
 					let left = readColour();
 					let right = readColour();
+					let patch = create_horizontal_gradient(left,right,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
 				else if(instruction === "vertical"){
 					let top = readColour();
 					let bottom = readColour();
+					let patch = create_vertical_gradient(top,bottom,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
 				else if(instruction === "diagonal_NW"){
 					let colour1 = readColour();
 					let colour2 = readColour();
+					let patch = create_diagonal_gradient(colour1,colour2,false,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
 				else if(instruction === "diagonal_NE"){
 					let colour1 = readColour();
 					let colour2 = readColour();
+					let patch = create_diagonal_gradient(colour1,colour2,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1757,10 +1935,10 @@ function decodeHoh(hohData){
 							if(
 								i + j - curr.x - curr.y < curr.size
 							){
-								imageData[i][j] = colour1
+								imageData[i][j] += colour1
 							}
 							else{
-								imageData[i][j] = colour2
+								imageData[i][j] += colour2
 							}
 						}
 					}
@@ -1773,10 +1951,10 @@ function decodeHoh(hohData){
 							if(
 								(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
 							){
-								imageData[i][j] = colour1
+								imageData[i][j] += colour1
 							}
 							else{
-								imageData[i][j] = colour2
+								imageData[i][j] += colour2
 							}
 						}
 					}
@@ -1787,7 +1965,7 @@ function decodeHoh(hohData){
 					let patch = create_odd_solid(colour1,colour2,false,true,curr.size)
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1797,7 +1975,7 @@ function decodeHoh(hohData){
 					let patch = create_odd_solid(colour1,colour2,false,false,curr.size)
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1807,7 +1985,7 @@ function decodeHoh(hohData){
 					let patch = create_odd_solid(colour1,colour2,true,true,curr.size)
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1817,7 +1995,7 @@ function decodeHoh(hohData){
 					let patch = create_odd_solid(colour1,colour2,true,false,curr.size)
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1827,7 +2005,7 @@ function decodeHoh(hohData){
 					let patch = create_dip(colour1,colour2,false,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1837,7 +2015,7 @@ function decodeHoh(hohData){
 					let patch = create_dip(colour1,colour2,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1847,7 +2025,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,false,false,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y];
+							imageData[i][j] += patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -1857,7 +2035,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,false,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y]
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1867,7 +2045,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,true,false,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y]
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1877,7 +2055,7 @@ function decodeHoh(hohData){
 					let patch = create_third(colour1,colour2,true,true,curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y]
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
@@ -1887,14 +2065,34 @@ function decodeHoh(hohData){
 					let patch = create_dct(colour1,colour2,parseInt(instruction[3]),parseInt(instruction[4]),curr.size);
 					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
-							imageData[i][j] = patch[i - curr.x][j - curr.y]
+							imageData[i][j] += patch[i - curr.x][j - curr.y]
 						}
 					}
 				}
+					blockQueue.push({
+						x: curr.x,
+						y: curr.y,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x + curr.size/2,
+						y: curr.y,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x + curr.size/2,
+						y: curr.y + curr.size/2,
+						size: curr.size/2
+					})
+					blockQueue.push({
+						x: curr.x,
+						y: curr.y + curr.size/2,
+						size: curr.size/2
+					})
 			}
 			if(curr.size === 2){
 				let instruction = readSmallSymbol();
-				if(monochrome){
+				/*if(monochrome){
 					if(instruction === "pixels"){
 						write2x2(curr,readColour(),readColour(),readColour(),readColour())
 					}
@@ -1906,7 +2104,7 @@ function decodeHoh(hohData){
 						let topColour = readColour();
 						let bottomColour = 0;
 						if(topColour === 0){
-							bottomColour = max_val
+							bottomColour = 255
 						}
 						write2x2(curr,topColour,topColour,bottomColour,bottomColour)
 					}
@@ -1914,7 +2112,7 @@ function decodeHoh(hohData){
 						let leftColour = readColour();
 						let rightColour = 0;
 						if(leftColour === 0){
-							rightColour = max_val
+							rightColour = 255
 						}
 						write2x2(curr,leftColour,rightColour,rightColour,leftColour)
 					}
@@ -1928,7 +2126,7 @@ function decodeHoh(hohData){
 						let a = readColour();
 						let b = 0;
 						if(a === 0){
-							b = max_val
+							b = 255
 						}
 						write2x2(curr,a,a,b,a)
 					}
@@ -1936,7 +2134,7 @@ function decodeHoh(hohData){
 						let a = readColour();
 						let b = 0;
 						if(a === 0){
-							b = max_val
+							b = 255
 						}
 						write2x2(curr,a,a,a,b)
 					}
@@ -1944,7 +2142,7 @@ function decodeHoh(hohData){
 						let a = readColour();
 						let b = 0;
 						if(a === 0){
-							b = max_val
+							b = 255
 						}
 						write2x2(curr,a,b,b,b)
 					}
@@ -1952,13 +2150,15 @@ function decodeHoh(hohData){
 						let a = readColour();
 						let b = 0;
 						if(a === 0){
-							b = max_val
+							b = 255
 						}
 						write2x2(curr,b,a,b,b)
 					}
 				}
-				else{
-					if(instruction === "pixels"){
+				else{*/
+					if(instruction === "STOP"){
+					}
+					else if(instruction === "pixels"){
 						write2x2(curr,readColour(),readColour(),readColour(),readColour())
 					}
 					else if(instruction === "whole"){
@@ -2007,15 +2207,29 @@ function decodeHoh(hohData){
 						let b = readColour();
 						write2x2(curr,b,a,b,b)
 					}
+				//}
+			}
+		}
+		let maxi = 0;
+		let mini = 0;
+		for(let i=0;i<imageData.length;i++){
+			for(let j=0;j<imageData[0].length;j++){
+				maxi = Math.max(maxi,imageData[i][j]);
+				mini = Math.min(mini,imageData[i][j]);
+				if(imageData[i][j] < 0){
+					imageData[i][j] = imageData[i][j] + 256
 				}
 			}
 		}
+		console.log("maxi",maxi);
+		console.log("mini",mini);
 		return imageData;
 	}
 	const luma = decode_channel();
 	if(currentIndex < hohData.length){
 		const CB = decode_channel();
 		const CR = decode_channel();
+		console.log("CB",CB);
 		return {
 			luma: luma,
 			Cb: CB,

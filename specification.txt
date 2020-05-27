@@ -1,0 +1,77 @@
+All .hoh files start with a header:
+
+(Raw bytes in hexadecimal)
+
+1st byte: 48
+2nd byte: 4F
+3rd byte: 48
+
+4th byte: TBA
+
+5th byte: upper 8 bits of width
+6th byte: lower 8 bits of width
+
+7th byte: upper 8 bits of height
+8th byte: lower 8 bits of height
+
+9th byte: channel format
+	- 00: greyscale (1-channel)
+	- 01: RGB (3-channel)
+	- 02: YCbCr (3-channel)
+	- 03: YIQ26 (3-channel)
+	- 04: YCoCg (3-channel)
+
+10th byte: number of frames
+
+After the header, there are one or more channels.
+If there are more channels than the header specifies, the first of the additional channels are alpha.
+
+Channel header:
+
+bit depth: 8 bits
+colour table method: 2 bits (SUBJECT TO CHANGE)
+	- 0: no colour table (entire range)
+	- 1: full colour table (size: 2^bit_dept bits (32 byte for 8-bit colour))
+	- 2: specific colours
+		bit_depth number of bits for number of colours
+		values as delta-coded with (default huffman table - 1)
+	- 3: range encoding
+		bit_depth number of bits for number of ranges
+		values as delta-coded with (default huffman table)
+Large block huffman tree
+Small block huffman tree
+Huffman method: 1 bit
+	huffman tree
+
+
+
+Data padded with zeroes to whole byte
+
+
+# Decoder behaviour
+
+Decoders and encoders are in this specification one of the following:
+	- Conforming
+	- Experimental
+	- Future
+
+A "Conforming" decoder/encoder follows the rules of this specification.
+An "Experimental" decoder/encoder is designed from this specification, but may diverge from that's written here.
+A "Future" decoder/encoder is designer from a future version of this specification.
+
+
+Conforming and Experimental decoders should give no image data and repport an error if the first three bytes are not as specified.
+	(Future decoders may use a different prefix)
+Conforming and Experimental encoder should always write the first three bytes as specified
+	(Future encoders may use a different prefix)
+
+For the fourth byte, conforming encoders should write the 0-byte.
+Experimental encoders should use a non-zero byte that's not a printable ASCII character. If a conforming decoder should not try to decode the data from such an experimental encoder, the 4th byte should be FF.
+
+If the 4th byte is 0, an experimental decoder may assume that the encoded data is not written by an experimental encoder.
+If the 4th byte is FF, a conforming decoder should not produce any decoded data and repport an error.
+
+
+
+
+
