@@ -37,6 +37,96 @@ function rgba_to_yiq26a(imageData){
 	return outBuffer
 }
 
+function rgba_to_rgb(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 4){
+		outBuffer.push(imageData[i],imageData[i+1],imageData[i+2])
+	}
+	return outBuffer
+}
+
+function rgb_to_rgba(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		outBuffer.push(imageData[i],imageData[i+1],imageData[i+2],255)
+	}
+	return outBuffer
+}
+
+function check_rgba_alpha(imageData){
+	for(let i=3;i<imageData.length;i += 4){
+		if(imageData[i] !== 255){
+			return false
+		}
+	}
+	return true
+}
+
+function rgb_to_greyscale(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		outBuffer.push(Math.round((imageData[i] + imageData[i + 1] + imageData[i + 2])/3))
+	}
+	return outBuffer
+}
+
+function greyscale_to_rgb(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i++){
+		outBuffer.push(imageData[i],imageData[i],imageData[i])
+	}
+	return outBuffer
+}
+
+function check_tripplets(imageData){
+	for(let i=0;i<imageData.length;i += 3){
+		if(
+			imageData[i] !== imageData[i + 1]
+			|| imageData[i] !== imageData[i + 2]
+		){
+			return false
+		}
+	}
+	return true
+}
+
+function greyscale_to_bitmap(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i++){
+		outBuffer.push((imageData[i] < 128 ? 0 : 1))
+	}
+	return outBuffer
+}
+
+function check_bitmap(imageData){
+	for(let i=0;i<imageData.length;i++){
+		if(
+			imageData[i] !== 0
+			&& imageData[i] !== 255
+		){
+			return false
+		}
+	}
+	return true
+}
+
+function rgb_to_yiq26(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		let R = imageData[i];
+		let G = imageData[i + 1];
+		let B = imageData[i + 2];
+		let Y = (((R + B)>>1) + G)>>1;
+		let Co = R - B;
+		let Cg = G - ((R + B)>>1);
+
+		outBuffer[i] = Y;
+		outBuffer[i + 1] = Co + BYTE_MAX_VAL;
+		outBuffer[i + 2] = Cg + BYTE_MAX_VAL
+	}
+	return outBuffer
+}
+
 function yiq26a_to_rgba(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i += 4){
@@ -51,6 +141,34 @@ function yiq26a_to_rgba(imageData){
 		outBuffer[i + 1] = G;
 		outBuffer[i + 2] = B;
 		outBuffer[i + 3] = imageData[i + 3]
+	}
+	return outBuffer
+}
+
+function yiq26_to_rgb(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		let Y = imageData[i];
+		let Co = imageData[i + 1] - BYTE_MAX_VAL;
+		let Cg = imageData[i + 2] - BYTE_MAX_VAL;
+		let G = Y - ((-Cg)>>1);
+		let B = Y + ((1-Cg)>>1) - (Co>>1);
+		let R = Co + B;
+
+		outBuffer[i] = R;
+		outBuffer[i + 1] = G;
+		outBuffer[i + 2] = B
+	}
+	return outBuffer
+}
+
+function add8bitAlpha(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		outBuffer.push(imageData[i]);
+		outBuffer.push(imageData[i + 1]);
+		outBuffer.push(imageData[i + 2]);
+		outBuffer.push(255);
 	}
 	return outBuffer
 }
@@ -185,22 +303,15 @@ function buildBook(huffmanTree){
 	return book
 }
 
-let base_freq_256 = [];
-let start = 10000;
-for(let i=0;i<256;i++){
-	base_freq_256.push(start);
-	start = Math.round(start*9/10);
+function primitive_huffman(states){
+	let base_freq = [];
+	let start = 10000;
+	for(let i=0;i<states;i++){
+		base_freq.push(start);
+		start = Math.round(start * (1/2 + (0.9 - 1/Math.sqrt(states))/2));
+	}
+	return createHuffman(base_freq)
 }
-
-let base_freq_512 = [];
-start = 10000;
-for(let i=0;i<512;i++){
-	base_freq_512.push(start);
-	start = Math.round(start*19/20);
-}
-
-const PRIMITIVE_256 = buildBook(createHuffman(base_freq_256));
-const PRIMITIVE_512 = buildBook(createHuffman(base_freq_512));
 
 function find_average(chunck,ceiling){
 	let sum = 0;
@@ -500,7 +611,9 @@ const smallSymbolTable = [
 	"diagonal_solid_NE",
 	"diagonal_solid_SW",
 	"diagonal_solid_SE",
-	"cross"
+	"cross",
+	"PREVIOUS",
+	"TOP"
 ]
 
 const largeSymbolTable = [
@@ -537,7 +650,17 @@ const largeSymbolTable = [
 	"dct02",
 	"dct20",
 	"dct32",
-	"dct23"
+	"dct23",
+	"PREVIOUS",
+	"TOP",
+	"TOPLEFT",
+	"TOPRIGHT",
+	"AVERAGE",
+	"PAETH"
+]
+
+const internal_formats = [
+	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a"
 ]
 
 function encoder(imageData,options){
@@ -545,9 +668,53 @@ function encoder(imageData,options){
 	const width = options.width;
 	const height = options.height;
 	const encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
-	if(!["rgba","yiq26a"].includes(options.pixelFormat)){
-		throw "only rgba or yiq26a supported"
+	if(!internal_formats.includes(options.pixelFormat)){
+		throw "only " + internal_formats.join(", ") + " supported"
 	}
+	if(options.target_pixelFormat && !internal_formats.includes(options.target_pixelFormat)){
+		throw "only " + internal_formats.join(", ") + " supported"
+	}
+
+	if(!options.target_pixelFormat){
+		if(options.pixelFormat === "rgb"){
+			options.target_pixelFormat === "yiq26"
+		}
+		else if(options.pixelFormat === "rgba"){
+			options.target_pixelFormat === "yiq26a"
+		}
+		else{
+			options.target_pixelFormat = options.pixelFormat
+		}
+	}
+	if(options.optimizeChannels){
+		if(options.pixelFormat === "rgba"){
+			if(check_rgba_alpha(imageData)){
+				console.log("removing redundant alpha");
+				imageData = rgba_to_rgb(imageData);
+				options.pixelFormat = "rgb";
+				if(options.target_pixelFormat === "yiq26a"){
+					options.target_pixelFormat = "yiq26"
+				}
+			}
+		}
+		if(options.pixelFormat === "rgb"){
+			if(check_tripplets(imageData)){
+				console.log("removing redundant chroma channels");
+				imageData = rgb_to_greyscale(imageData);
+				options.pixelFormat = "greyscale";
+				options.target_pixelFormat = "greyscale"
+			}
+		}
+		if(options.pixelFormat === "greyscale"){
+			if(check_bitmap(imageData)){
+				console.log("encoding as bitmap");
+				imageData = greyscale_to_bitmap(imageData);
+				options.pixelFormat = "bit";
+				options.target_pixelFormat = "bit";
+			}
+		}
+	}
+
 	let encodedData = [];
 	let bitBuffer = [];
 
@@ -572,13 +739,9 @@ function encoder(imageData,options){
 	writeByteNative(0);
 	bitBuffer.push(...encodeVarint(width,BYTE_LENGTH));
 	bitBuffer.push(...encodeVarint(height,BYTE_LENGTH));
-	writeByteNative(3);//YIQ26
+	writeByteNative(internal_formats.indexOf(options.target_pixelFormat));
 	bitBuffer.push(...encodeVarint(0,BYTE_LENGTH));//still image
 //end write header
-	
-	if(options.pixelFormat === "rgba"){
-		imageData = rgba_to_yiq26a(imageData)
-	}
 
 
 	encodeChannel = function(channelData,options){
@@ -601,6 +764,8 @@ function encoder(imageData,options){
 			s_diagonal_solid_SE: 0,
 			s_cross: 0,
 			s_STOP: 0,
+			s_PREVIOUS: 0,
+			s_TOP: 0,
 			STOP: 0,
 			divide: 0,
 			whole: 0,
@@ -634,102 +799,103 @@ function encoder(imageData,options){
 			dct02: 0,
 			dct20: 0,
 			dct32: 0,
-			dct23: 0
+			dct23: 0,
+			PREVIOUS: 0,
+			TOP: 0,
+			TOPLEFT: 0,
+			TOPRIGHT: 0,
+			AVERAGE: 0,
+			PAETH: 0
 		}
 
+		let table_ceiling = CHANNEL_POWER;
+		let occupied;
+		let frequencyTable;
+		let delta_data;
+		let range_data;
+		if(CHANNEL_LENGTH > 1){
 //tables
-		let frequencyTable = new Array(CHANNEL_POWER).fill(0);
-		for(let i=0;i<channelData.length;i++){
-			for(let j=0;j<channelData[0].length;j++){
-				frequencyTable[channelData[i][j]]++;
-			}
-		};
-		let occupied = frequencyTable.filter(a => a).length;
-		console.log(options.name,Math.round(100*occupied/frequencyTable.length) + "%",frequencyTable);
-		console.log(options.name,"raw table size",CHANNEL_POWER);
-		let delta_data = rePlex(occupied,CHANNEL_LENGTH);
-		let delta = 0;
-		for(let i=0;i<CHANNEL_POWER;i++){
-			delta++;
-			if(frequencyTable[i]){
-				if(CHANNEL_LENGTH === 8){
-					delta_data = delta_data.concat(PRIMITIVE_256[delta - 1]);
-					delta = 0
+			frequencyTable = new Array(CHANNEL_POWER).fill(0);
+			for(let i=0;i<channelData.length;i++){
+				for(let j=0;j<channelData[0].length;j++){
+					frequencyTable[channelData[i][j]]++;
 				}
-				else if(CHANNEL_LENGTH === 9){
-					delta_data = delta_data.concat(PRIMITIVE_512[delta - 1]);
-					delta = 0
-				}
-				else{
-					throw "no delta support in colour table"
-				}
-			}
-		}
-		console.log(options.name,"delta table size",delta_data.length);
-		let listing_data = rePlex(occupied,CHANNEL_LENGTH);
-		for(let i=0;i<CHANNEL_POWER;i++){
-			if(frequencyTable[i]){
-				listing_data = listing_data.concat(rePlex(i,CHANNEL_LENGTH))
-			}
-		}
-		console.log(options.name,"list table size",listing_data.length);
-		let range_data = [];
-		let rangeActive = false;
-		delta = 0;
-		let shift_counter = 0;
-		for(let i=0;i<CHANNEL_POWER;i++){
-			delta++;
-			if(
-				(frequencyTable[i] && rangeActive === false)
-				|| (!frequencyTable[i] && rangeActive === true)
-			){
-				rangeActive = !rangeActive;
-				shift_counter++;
-				if(CHANNEL_LENGTH === 8){
-					range_data = range_data.concat(PRIMITIVE_256[delta - 1]);
-					delta = 0
-				}
-				else if(CHANNEL_LENGTH === 9){
-					range_data = range_data.concat(PRIMITIVE_512[delta - 1]);
-					delta = 0
-				}
-				else{
-					throw "no delta support in colour table"
-				}
-			}
-		}
-		if(rangeActive){
-			range_data = range_data.concat(PRIMITIVE_256[0])
-			shift_counter++
-		}
-		range_data = rePlex(shift_counter/2,CHANNEL_LENGTH - 1).concat(range_data);
-		console.log(options.name,"range delta table size",range_data.length);
+			};
+			occupied = frequencyTable.filter(a => a).length;
+			console.log(options.name,Math.round(100*occupied/frequencyTable.length) + "%",frequencyTable);
+			console.log(options.name,"raw table size",CHANNEL_POWER);
+			delta_data = rePlex(occupied,CHANNEL_LENGTH);
+			let delta = 0;
 
-		let translationTable = new Array(CHANNEL_POWER);
-		delta = 0;
-		for(let i=0;i<CHANNEL_POWER;i++){
-			if(
-				frequencyTable[i]
-			){
-				translationTable[i] = delta;
-				delta++
-			}
-		}
-		const table_ceiling = delta;
-		console.log("table_ceiling",table_ceiling);
+			const PRIMITIVE = buildBook(primitive_huffman(CHANNEL_POWER));
 
-		for(let i=0;i<channelData.length;i++){
-			for(let j=0;j<channelData[0].length;j++){
-				channelData[i][j] = translationTable[channelData[i][j]]
+			for(let i=0;i<CHANNEL_POWER;i++){
+				delta++;
+				if(frequencyTable[i]){
+					delta_data = delta_data.concat(PRIMITIVE[delta - 1]);
+					delta = 0
+				}
+			}
+			console.log(options.name,"delta table size",delta_data.length);
+			let listing_data = rePlex(occupied,CHANNEL_LENGTH);
+			for(let i=0;i<CHANNEL_POWER;i++){
+				if(frequencyTable[i]){
+					listing_data = listing_data.concat(rePlex(i,CHANNEL_LENGTH))
+				}
+			}
+			console.log(options.name,"list table size",listing_data.length);
+			range_data = [];
+			let rangeActive = false;
+			delta = 0;
+			let shift_counter = 0;
+			for(let i=0;i<CHANNEL_POWER;i++){
+				delta++;
+				if(
+					(frequencyTable[i] && rangeActive === false)
+					|| (!frequencyTable[i] && rangeActive === true)
+				){
+					rangeActive = !rangeActive;
+					shift_counter++;
+					range_data = range_data.concat(PRIMITIVE[delta - 1]);
+					delta = 0
+				}
+			}
+			if(rangeActive){
+				range_data = range_data.concat(PRIMITIVE[0]);
+				shift_counter++
+			}
+			range_data = rePlex(shift_counter/2,CHANNEL_LENGTH - 1).concat(range_data);
+			console.log(options.name,"range delta table size",range_data.length);
+
+			let translationTable = new Array(CHANNEL_POWER);
+			delta = 0;
+			for(let i=0;i<CHANNEL_POWER;i++){
+				if(
+					frequencyTable[i]
+				){
+					translationTable[i] = delta;
+					delta++
+				}
+			}
+			table_ceiling = delta;
+			console.log("table_ceiling",table_ceiling);
+
+			for(let i=0;i<channelData.length;i++){
+				for(let j=0;j<channelData[0].length;j++){
+					channelData[i][j] = translationTable[channelData[i][j]]
+				}
 			}
 		}
-		
+//end tables
+			
 		let currentEncode = [];
 		for(let i=0;i<channelData.length;i++){
 			currentEncode.push(new Array(height).fill(0))
 		}
-
-//end tables
+		let forbidden = [];
+		for(let i=0;i<channelData.length;i++){
+			forbidden.push(new Array(height).fill(false))
+		}
 
 		let error_compare = function(chunck1,chunck2,offx,offy){
 			let sumError = 0;
@@ -794,23 +960,19 @@ function encoder(imageData,options){
 			stats[symbol]++;
 		}
 
-		let forige = 0;
 		let writeByte = function(integer){
 			if(integer !== Math.round(integer)){
 				throw "fractional"
 			}
-			//let encodedInteger = integer - forige;
-			let encodedInteger = integer;
-			forige = integer;
-			if(encodedInteger < 0){
-				encodedInteger += table_ceiling
+			if(integer < 0){
+				integer += table_ceiling
 			}
-			if(encodedInteger < 0){
+			if(integer < 0){
 				console.log(integer,table_ceiling);
 				throw "bad";
 			}
-			aritmetic_queue.push(encodedInteger);
-			integerFrequency[encodedInteger]++
+			aritmetic_queue.push(integer);
+			integerFrequency[integer]++
 		}
 		/*let writeByte = function(integer){
 			let encodedInteger = integer - forige;
@@ -822,7 +984,10 @@ function encoder(imageData,options){
 			integerFrequency[encodedInteger]++
 		}*/
 
-		let sharpener = function(a,b,chuncker,resolver,symbol){
+		let sharpener = function(a,b,chuncker,resolver,symbol,tuning){
+			if(!tuning){
+				tuning = 1
+			}
 			let patch = chuncker(a,b);
 			let error = resolver(patch);
 			if(options.force){
@@ -853,22 +1018,24 @@ function encoder(imageData,options){
 			}
 			return {
 				symbol: symbol,
-				error: error,
+				error: error * tuning,
 				colours: [a,b],
 				patch: patch
 			}
 		}
 
-		let blockQueue = [{x: 0,y:0, size: encoding_size}];
-
-		while(blockQueue.length){
-			let curr = blockQueue.pop();
-			if(
-				curr.x >= width
-				|| curr.y >= height
-			){
+		for(let size = encoding_size; size > 1;size = size/2){
+		for(let x = 0;x < width;x += size){
+		for(let y = 0;y < height;y += size){
+			let curr = {x: x,y: y,size: size};
+			if(forbidden[x][y]){
 				continue
 			}
+			if(curr.size > options.maxBlockSize){
+				writeLargeSymbol("divide");
+				continue
+			}
+
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
 			let perfect = chunck.flat().filter(a => a).length === 0;
 			if(curr.size > 200){
@@ -877,6 +1044,13 @@ function encoder(imageData,options){
 			if(curr.size >= 4){
 				if(perfect){
 					writeLargeSymbol("STOP");
+					for(let i=0;i<curr.size;i++){
+						for(let j=0;j<curr.size;j++){
+							if((curr.x + i) < width && (curr.y + j) < height){
+								forbidden[curr.x + i][curr.y + j] = true
+							}
+						}
+					}
 					continue;
 				}
 				let average = find_average(chunck,table_ceiling);
@@ -992,14 +1166,16 @@ function encoder(imageData,options){
 					bottom,
 					(a,b) => create_vertical_gradient(a,b,curr.size),
 					patch => error_compare(chunck,patch,curr.x,curr.y),
-					"vertical"
+					"vertical",
+					1
 				))
 				errorQueue.push(sharpener(
 					left,
 					right,
 					(a,b) => create_horizontal_gradient(a,b,curr.size),
 					patch => error_compare(chunck,patch,curr.x,curr.y),
-					"horizontal"
+					"horizontal",
+					1
 				))
 				errorQueue.push(sharpener(
 					NW,
@@ -1020,14 +1196,14 @@ function encoder(imageData,options){
 					NW_s,
 					SE_s,
 					(a,b) => create_diagonal_solid(a,b,false,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"diagonal_solid_NW"
 				))
 				errorQueue.push(sharpener(
 					NE_s,
 					SW_s,
 					(a,b) => create_diagonal_solid(a,b,true,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"diagonal_solid_NE"
 				))
 
@@ -1035,7 +1211,7 @@ function encoder(imageData,options){
 					steep_NW,
 					steep_SE,
 					(a,b) => create_odd_solid(a,b,false,true,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"steep_NW"
 				))
 
@@ -1043,7 +1219,7 @@ function encoder(imageData,options){
 					calm_NW,
 					calm_SE,
 					(a,b) => create_odd_solid(a,b,false,false,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"calm_NW"
 				))
 
@@ -1051,7 +1227,7 @@ function encoder(imageData,options){
 					steep_NE,
 					steep_SW,
 					(a,b) => create_odd_solid(a,b,true,true,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"steep_NE"
 				))
 
@@ -1059,7 +1235,7 @@ function encoder(imageData,options){
 					calm_NE,
 					calm_SW,
 					(a,b) => create_odd_solid(a,b,true,false,curr.size),
-					patch => error_compare(chunck,patch,curr.x,curr.y),
+					patch => 1.1*error_compare(chunck,patch,curr.x,curr.y),
 					"calm_NE"
 				))
 
@@ -1193,7 +1369,7 @@ function encoder(imageData,options){
 						(a,b) => create_dct(a,b,1,3,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"dct13"
-					))
+					))	
 					errorQueue.push(sharpener(
 						corner_NW_SE,
 						corner_NE_SW,
@@ -1207,6 +1383,193 @@ function encoder(imageData,options){
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"dct31"
 					))
+				}
+			
+				if(curr.x !== 0){
+					let previousPatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						if((curr.x + i) >= width){
+							for(let j=0;j<curr.size;j++){
+								col.push(0)
+							}
+						}
+						else{
+							for(let j=0;j<curr.size;j++){
+								if((curr.y + j) >= height){
+									col.push(0)
+								}
+								else{
+									col.push(currentEncode[curr.x - curr.size + i][curr.y + j] - currentEncode[curr.x + i][curr.y + j] )
+								}
+							}
+						}
+						previousPatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "PREVIOUS",
+						error: error_compare(chunck,previousPatch,curr.x,curr.y)*0.39,
+						colours: [],
+						patch: previousPatch
+					})
+				}
+				if(curr.y !== 0){
+					let topPatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						if((curr.x + i) >= width){
+							for(let j=0;j<curr.size;j++){
+								col.push(0)
+							}
+						}
+						else{
+							for(let j=0;j<curr.size;j++){
+								if((curr.y + j) >= height){
+									col.push(0)
+								}
+								else{
+									col.push(currentEncode[curr.x + i][curr.y - curr.size + j] - currentEncode[curr.x + i][curr.y + j] )
+								}
+							}
+						}
+						topPatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "TOP",
+						error: error_compare(chunck,topPatch,curr.x,curr.y)*0.39,
+						colours: [],
+						patch: topPatch
+					})
+				}
+
+				if(curr.y !== 0 && curr.x !== 0){
+					let topLeftPatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						if((curr.x + i) >= width){
+							for(let j=0;j<curr.size;j++){
+								col.push(0)
+							}
+						}
+						else{
+							for(let j=0;j<curr.size;j++){
+								if((curr.y + j) >= height){
+									col.push(0)
+								}
+								else{
+									col.push(currentEncode[curr.x - curr.size + i][curr.y - curr.size + j] - currentEncode[curr.x + i][curr.y + j] )
+								}
+							}
+						}
+						topLeftPatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "TOPLEFT",
+						error: error_compare(chunck,topLeftPatch,curr.x,curr.y)*0.39,
+						colours: [],
+						patch: topLeftPatch
+					})
+				}
+
+				if(curr.y !== 0 && curr.x !== 0){
+					let averagePatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						if((curr.x + i) >= width){
+							for(let j=0;j<curr.size;j++){
+								col.push(0)
+							}
+						}
+						else{
+							for(let j=0;j<curr.size;j++){
+								if((curr.y + j) >= height){
+									col.push(0)
+								}
+								else{
+									col.push(
+										Math.ceil(
+											(
+												currentEncode[curr.x + i][curr.y - curr.size + j]
+												+ currentEncode[curr.x - curr.size + i][curr.y + j]
+											)/2
+										)
+										 - currentEncode[curr.x + i][curr.y + j]
+									)
+								}
+							}
+						}
+						averagePatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "AVERAGE",
+						error: error_compare(chunck,averagePatch,curr.x,curr.y)*0.39,
+						colours: [],
+						patch: averagePatch
+					})
+				}
+
+				if(curr.y !== 0 && curr.x !== 0){
+					let paethPatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						if((curr.x + i) >= width){
+							for(let j=0;j<curr.size;j++){
+								col.push(0)
+							}
+						}
+						else{
+							for(let j=0;j<curr.size;j++){
+								if((curr.y + j) >= height){
+									col.push(0)
+								}
+								else{
+									col.push(
+										(
+											currentEncode[curr.x + i][curr.y - curr.size + j]
+											+ currentEncode[curr.x - curr.size + i][curr.y + j]
+											- currentEncode[curr.x - curr.size + i][curr.y - curr.size + j]
+										)
+										 - currentEncode[curr.x + i][curr.y + j]
+									)
+								}
+							}
+						}
+						paethPatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "PAETH",
+						error: error_compare(chunck,paethPatch,curr.x,curr.y)*0.4,
+						colours: [],
+						patch: paethPatch
+					})
+				}
+
+				if(curr.y !== 0 && (curr.x + 2*curr.size) <= width){
+					let topRightPatch = [];
+					for(let i=0;i<curr.size;i++){
+						let col = [];
+						for(let j=0;j<curr.size;j++){
+							if((curr.y + j) >= height){
+								col.push(0)
+							}
+							else{
+								col.push(currentEncode[curr.x + curr.size + i][curr.y - curr.size + j] - currentEncode[curr.x + i][curr.y + j] )
+							}
+						}
+						topRightPatch.push(col);
+					}
+
+					errorQueue.push({
+						symbol: "TOPRIGHT",
+						error: error_compare(chunck,topRightPatch,curr.x,curr.y)*0.39,
+						colours: [],
+						patch: topRightPatch
+					})
 				}
 
 				/*let selected_patch;
@@ -1262,32 +1625,77 @@ function encoder(imageData,options){
 					}
 				}*/
 				//writeLargeSymbol("divide");
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x + curr.size/2,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
-				blockQueue.push({
-					x: curr.x,
-					y: curr.y + curr.size/2,
-					size: curr.size/2
-				})
 			}
-			else if(curr.size >= 2){
+			else if(curr.size === 2){
 				if(perfect){
 					writeSmallSymbol("STOP");
 					continue;
 				}
+				if(CHANNEL_LENGTH === 1){
+					if(chunck[0][0] === -1){
+						chunck[0][0] = 1
+					}
+					if(chunck[0][1] === -1){
+						chunck[0][1] = 1
+					}
+					if(chunck[1][0] === -1){
+						chunck[1][0] = 1
+					}
+					if(chunck[1][1] === -1){
+						chunck[1][1] = 1
+					}
+				}
+				if(curr.x !== 0){
+					if(curr.x + 1 === width){
+					}
+					else if(curr.y + 1 === height){
+					}
+					else{
+						if(
+							channelData[curr.x][curr.y] === channelData[curr.x - 2][curr.y]
+							&& channelData[curr.x + 1][curr.y] === channelData[curr.x - 1][curr.y]
+							&& channelData[curr.x][curr.y + 1] === channelData[curr.x - 2][curr.y + 1]
+							&& channelData[curr.x + 1][curr.y + 1] === channelData[curr.x - 1][curr.y + 1]
+						){
+							writeSmallSymbol("PREVIOUS");
+							continue
+						}
+					}
+				}
+				if(curr.y !== 0){
+					if(curr.x + 1 === width){
+					}
+					else if(curr.y + 1 === height){
+					}
+					else{
+						if(
+							channelData[curr.x][curr.y] === channelData[curr.x][curr.y - 2]
+							&& channelData[curr.x + 1][curr.y] === channelData[curr.x + 1][curr.y - 2]
+							&& channelData[curr.x][curr.y + 1] === channelData[curr.x][curr.y - 1]
+							&& channelData[curr.x + 1][curr.y + 1] === channelData[curr.x + 1][curr.y - 1]
+						){
+							writeSmallSymbol("TOP");
+							continue
+						}
+					}
+				}
+				/*if(curr.x !== 0 && curr.y !== 0){
+					if(curr.x + 1 === width){
+					}
+					else if(curr.y + 1 === height){
+					}
+					else{
+						if(
+							channelData[curr.x][curr.y] === Math.ceil((channelData[curr.x][curr.y - 2] + channelData[curr.x - 2][curr.y])/2)
+							&& channelData[curr.x + 1][curr.y] === Math.ceil((channelData[curr.x + 1][curr.y - 2] + channelData[curr.x - 1][curr.y])/2)
+							&& channelData[curr.x][curr.y + 1] === Math.ceil((channelData[curr.x][curr.y - 1] + channelData[curr.x - 2][curr.y + 1])/2)
+							&& channelData[curr.x + 1][curr.y + 1] === Math.ceil((channelData[curr.x + 1][curr.y - 1] + channelData[curr.x - 1][curr.y + 1])/2)
+						){
+							writeSmallSymbol("AVERAGE");
+							continue
+						}
+					}
+				}*/
 				if(
 					chunck[0][0] === chunck[1][0]
 					&& chunck[0][0] === chunck[1][1]
@@ -1319,23 +1727,25 @@ function encoder(imageData,options){
 					}
 					continue;
 				}
-				let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
-				if(dia1_err === 0){
-					writeSmallSymbol("diagonal_NW");
-					writeByte(chunck[0][0]);
-					if(table_ceiling > 2){
-						writeByte(chunck[1][1])
+				if(CHANNEL_LENGTH > 1){
+					let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
+					if(dia1_err === 0){
+						writeSmallSymbol("diagonal_NW");
+						writeByte(chunck[0][0]);
+						if(table_ceiling > 2){
+							writeByte(chunck[1][1])
+						}
+						continue
 					}
-					continue
-				}
-				let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
-				if(dia2_err === 0){
-					writeSmallSymbol("diagonal_NE");
-					writeByte(chunck[1][0]);
-					if(table_ceiling > 2){
-						writeByte(chunck[0][1])
+					let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
+					if(dia2_err === 0){
+						writeSmallSymbol("diagonal_NE");
+						writeByte(chunck[1][0]);
+						if(table_ceiling > 2){
+							writeByte(chunck[0][1])
+						}
+						continue
 					}
-					continue
 				}
 				if(
 					chunck[0][0] === chunck[1][0]
@@ -1412,6 +1822,8 @@ function encoder(imageData,options){
 				throw "invalid block size"
 			}
 		}
+		}
+		}
 
 		let encodeHuffTable = function(root,symbols){
 			let bitArray = [];
@@ -1444,23 +1856,33 @@ function encoder(imageData,options){
 
 		let smallHuffman = createHuffman(smallSymbolFrequency);
 		let smallSymbolBook = buildBook(smallHuffman);
-
-		if(CHANNEL_POWER < Math.min(delta_data,range_data)){
-			bitBuffer.push(0);
-			bitBuffer.push(1);
-			bitBuffer = bitBuffer.concat(
-				frequencyTable.map(ele => (ele ? 1 : 0))
-			)
-		}
-		else if(delta_data < range_data){
-			bitBuffer.push(1);
-			bitBuffer.push(0);
-			bitBuffer = bitBuffer.concat(delta_data)
-		}
-		else{
-			bitBuffer.push(1);
-			bitBuffer.push(1);
-			bitBuffer = bitBuffer.concat(range_data)
+		if(CHANNEL_LENGTH > 1){
+			if(occupied === CHANNEL_POWER){
+				bitBuffer.push(0);
+				bitBuffer.push(0);
+			}
+			else{
+				if(CHANNEL_POWER < Math.min(delta_data.length,range_data.length)){
+					bitBuffer.push(0);
+					bitBuffer.push(1);
+					console.log("using default encoding");
+					bitBuffer = bitBuffer.concat(
+						frequencyTable.map(ele => (ele ? 1 : 0))
+					)
+				}
+				else if(delta_data.length < range_data.length){
+					bitBuffer.push(1);
+					bitBuffer.push(0);
+					console.log("using delta encoding");
+					bitBuffer = bitBuffer.concat(delta_data)
+				}
+				else{
+					bitBuffer.push(1);
+					bitBuffer.push(1);
+					console.log("using range encoding");
+					bitBuffer = bitBuffer.concat(range_data)
+				}
+			}
 		}
 		bitBuffer = bitBuffer.concat(encodeHuffTable(largeHuffman,largeSymbolTable));
 		bitBuffer = bitBuffer.concat(encodeHuffTable(smallHuffman,smallSymbolTable));
@@ -1471,6 +1893,7 @@ function encoder(imageData,options){
 		let colourHuffman = createHuffman(integerFrequency);
 		let colourBook = buildBook(colourHuffman);
 
+		bitBuffer.push(0);
 		bitBuffer = bitBuffer.concat(encodeHuffTable(colourHuffman));
 
 		let usage = integerFrequency.reduce((acc,val,index) => {
@@ -1480,6 +1903,16 @@ function encoder(imageData,options){
 			else{
 				return acc
 			}},0);
+
+		let total_colourSymbols = integerFrequency.reduce((acc,val) => acc + val,0);
+		let ideal_colour_entropy = -integerFrequency.reduce((acc,val) => {
+			if(val){
+				return acc + Math.log2(val/total_colourSymbols) * val/total_colourSymbols
+			}
+			else{
+				return acc
+			}
+		},0) * total_colourSymbols
 
 		let usage_l = Object.keys(largeSymbolFrequency).reduce((acc,val,index) => {
 			if(largeSymbolFrequency[val]){
@@ -1495,16 +1928,38 @@ function encoder(imageData,options){
 			}
 			else{
 				return acc
-			}},0)
+			}},0);
 
-		console.log("  usage",usage)
+		let total_smallSymbols = Object.keys(smallSymbolFrequency).reduce((acc,val) => acc + smallSymbolFrequency[val],0);
+		let ideal_small_entropy = -Object.keys(smallSymbolFrequency).reduce((acc,val) => {
+			if(smallSymbolFrequency[val]){
+				return acc + Math.log2(smallSymbolFrequency[val]/total_smallSymbols) * smallSymbolFrequency[val]/total_smallSymbols
+			}
+			else{
+				return acc
+			}
+		},0) * total_smallSymbols
 
-		console.log("  usage_l",usage_l)
-		console.log("  usage_s",usage_s)
+		let total_largeSymbols = Object.keys(largeSymbolFrequency).reduce((acc,val) => acc + largeSymbolFrequency[val],0);
+		let ideal_large_entropy = -Object.keys(largeSymbolFrequency).reduce((acc,val) => {
+			if(largeSymbolFrequency[val]){
+				return acc + Math.log2(largeSymbolFrequency[val]/total_largeSymbols) * largeSymbolFrequency[val]/total_largeSymbols
+			}
+			else{
+				return acc
+			}
+		},0) * total_largeSymbols
+
+		console.log("  usage",usage,ideal_colour_entropy)
+
+		console.log("  usage_l",usage_l,ideal_large_entropy)
+		console.log("  usage_s",usage_s,ideal_small_entropy)
 		console.log("  total usage",usage + usage_l + usage_s);
 
-		console.log("i_freq",integerFrequency,translationTable);
+		console.log("i_freq",integerFrequency);
 		console.log(options.name,"stats",stats);
+
+		console.log("books",smallSymbolBook,largeSymbolBook,colourBook);
 
 		aritmetic_queue.forEach(waiting => {
 			try{
@@ -1528,33 +1983,790 @@ function encoder(imageData,options){
 		})
 		
 	}
+
+	if(options.pixelFormat === "rgba"){
+		if(options.target_pixelFormat === "yiq26a"){
+			imageData = rgba_to_yiq26a(imageData)
+		}
+	}
+	if(options.pixelFormat === "rgb"){
+		if(options.target_pixelFormat === "yiq26"){
+			imageData = rgb_to_yiq26(imageData)
+		}
+		else if(options.target_pixelFormat === "yiq26a"){
+			imageData = add8bitAlpha(rgb_to_yiq26(imageData))
+		}
+	}
+
+	if(!options.maxBlockSize){
+		options.maxBlockSize = encoding_size
+	}
+
 	let channels = deMultiplexChannels(imageData,width,height);
-	encodeChannel(channels[0],{
-		bitDepth: 8,
-		name: "Y",
-		quantizer: 0,
-		force: false,
-		useDCT: true
-	})
-	/*encodeChannel(channels[1],{
-		bitDepth: 9,
-		name: "I",
-		quantizer: 0
-	})
-	encodeChannel(channels[2],{
-		bitDepth: 9,
-		name: "Q",
-		quantizer: 0
-	})
-	encodeChannel(channels[3],{
-		bitDepth: 8,
-		name: "a",
-		quantizer: 0
-	})*/
+
+	if(options.target_pixelFormat === "yiq26a"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "Y",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[1],{
+			bitDepth: 9,
+			name: "I",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[2],{
+			bitDepth: 9,
+			name: "Q",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[3],{
+			bitDepth: 8,
+			name: "a",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+	}
+	else if(options.target_pixelFormat === "yiq26"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "Y",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[1],{
+			bitDepth: 9,
+			name: "I",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[2],{
+			bitDepth: 9,
+			name: "Q",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+	}
+	else if(options.target_pixelFormat === "rgba"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "r",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[1],{
+			bitDepth: 8,
+			name: "g",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[2],{
+			bitDepth: 8,
+			name: "b",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+		encodeChannel(channels[3],{
+			bitDepth: 8,
+			name: "a",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+	}
+	else if(options.target_pixelFormat === "greyscale"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "Y",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+	}
+	else if(options.target_pixelFormat === "bit"){
+		encodeChannel(channels[0],{
+			bitDepth: 1,
+			name: "bitmap",
+			quantizer: 0,
+			force: false,
+			useDCT: options.useDCT,
+			maxBlockSize: options.maxBlockSize
+		})
+	}
 
 	//numberOfCombinations(channels[0],channels[1])
 
-	return encodedData
+	if(bitBuffer.length){
+		while(bitBuffer.length < 8){
+			bitBuffer.push(0)
+		}
+		encodedData.push(dePlex(bitBuffer.splice(0,8)))
+	}
+
+	return Uint8Array.from(encodedData)
+}
+
+function decoder(hohData,options){
+	if(!options){
+		return{
+			imageData: null,
+			error: "usage: decoder(hohData,options)"
+		}
+	}
+	if(!options.pixelFormat){
+		return{
+			imageData: null,
+			error: "a pixelFormat is required. Use decoder(hohData,{pixelFormat: 'rgba'}} if unsure"
+		}
+	}
+	if(!["rgba","yiq26a"].includes(options.pixelFormat)){
+		return{
+			imageData: null,
+			error: "only rgba or yiq26a supported for pixelFormat"
+		}
+	}
+	if(hohData.length < 8){
+		return{
+			imageData: null,
+			error: "data does not contain required header"
+		}
+	}
+	let currentIndex = 1;
+	let bitBuffer = rePlex(hohData[0]);
+	let readByteNative = function(){
+		if(currentIndex < hohData.length){
+			bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+		}
+		else if(bifBuffer.length < BYTE_LENGTH){
+			throw "unexpeced end of file"
+		}
+		return dePlex(bitBuffer.splice(0,BYTE_LENGTH))
+	}
+	let readBit = function(){
+		if(bitBuffer.length === 0){
+			if(currentIndex < hohData.length){
+				bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+			}
+			else{
+				throw "unexpeced end of file"
+			}
+		}
+		return bitBuffer.splice(0,1)[0]
+	}
+	if(!(readByteNative() === 72 && readByteNative() === 79 && readByteNative() === 72 && readByteNative() === 0)){
+		return{
+			imageData: null,
+			error: "not a hoh image. Signature does not match"
+		}
+	}
+	let readVarint = function(base){
+		if(!base){
+			base = BYTE_LENGTH
+		}
+		let buffer = [];
+		while(readBit()){
+			if(bitBuffer.length < (BYTE_LENGTH - 1)){
+				bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+			}
+			buffer = buffer.concat(bitBuffer.splice(0,BYTE_LENGTH - 1))
+		}
+		if(bitBuffer.length < (BYTE_LENGTH - 1)){
+			bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+		}
+		buffer = buffer.concat(bitBuffer.splice(0,BYTE_LENGTH - 1));
+		return dePlex(buffer);
+	}
+	const width = readVarint(BYTE_LENGTH);
+	const height = readVarint(BYTE_LENGTH);
+
+	const encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
+
+	let pixelFormat = internal_formats[readByteNative()];
+
+	console.log(width,height,pixelFormat);
+
+	let frames = readVarint(BYTE_LENGTH);
+	if(frames !== 0){
+		throw "animation decoding not supported"
+	}
+
+	let channels = [];
+
+	let decodeHuffTable = function(symbols){
+		let blockLength = BYTE_LENGTH;
+		if(symbols){
+			blockLength = Math.ceil(Math.log2(symbols.length))
+		}
+		let readNode = function(){
+			let isInternal = readBit();
+			if(isInternal){
+				return {
+					isInternal: true,
+					left: readNode(),
+					right: readNode()
+				}
+			}
+			else{
+				let matissa = [];
+				for(let i=0;i<blockLength;i++){
+					matissa.push(readBit())
+				}
+				if(symbols){
+					return {
+						isInternal: false,
+						symbol: symbols[dePlex(matissa)]
+					}
+				}
+				else{
+					return {
+						isInternal: false,
+						symbol: dePlex(matissa)
+					}
+				}
+			}
+		}
+		return readNode()
+	}
+
+	let decodeChannel = function(options){
+		const CHANNEL_LENGTH = options.bitDepth;
+		const CHANNEL_POWER = Math.pow(2,CHANNEL_LENGTH);
+		const CHANNEL_MAX_VAL = CHANNEL_POWER - 1;
+
+		const PRIMITIVE = primitive_huffman(CHANNEL_POWER);
+
+		let readDelta = function(){
+			let head = PRIMITIVE;
+			while(head.isInternal){
+				if(readBit()){
+					head = head.right
+				}
+				else{
+					head = head.left
+				}
+			}
+			return head.symbol
+		}
+
+		let channelData = [];
+		let currentEncode = [];
+		for(let i=0;i<width;i++){
+			channelData.push(new Array(height).fill(0));
+			currentEncode.push(new Array(height).fill(0))
+		}
+		let flagBit1 = readBit();
+		let flagBit2 = readBit();
+		console.log(flagBit1,flagBit2);
+
+		let translationTable = [];
+
+		if(flagBit1 === 1 && flagBit2 === 1){
+			if(bitBuffer.length < (CHANNEL_LENGTH - 1) && currentIndex < hohData.length){
+				bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+			}
+			let ranges = dePlex(bitBuffer.splice(0,BYTE_LENGTH - 1));
+			console.log("range number",ranges);
+			let deltas = [];
+			for(let i=0;i<ranges*2;i++){
+				deltas.push(parseInt(readDelta()) + 1)
+			};
+			let colourAllowable;
+			let rangeActive = false;
+			let index = 0;
+			deltas.forEach((delta,index) => {
+				if(index === 0){
+					colourAllowable = new Array(delta - 1).fill(rangeActive)
+				}
+				else{
+					colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
+				}
+				rangeActive = !rangeActive
+			});
+			colourAllowable.forEach((val,index) => {
+				if(val){
+					translationTable.push(index)
+				}
+			})
+		}
+		else{
+			throw "here we go again"
+		}
+		try{
+			let table_ceiling = translationTable.length;
+			let colourHuffman;
+			let largeHuffman = decodeHuffTable(largeSymbolTable);
+			let smallHuffman = decodeHuffTable(smallSymbolTable);
+			let colourMethod = readBit();
+			if(colourMethod === 0){
+				colourHuffman = decodeHuffTable()
+			}
+			else{
+				throw "only huffman colour method supported"
+			}
+
+			let readLargeSymbol = function(){
+				let head = largeHuffman;
+				while(head.isInternal){
+					if(readBit()){
+						head = head.right
+					}
+					else{
+						head = head.left
+					}
+				}
+				return head.symbol
+			}
+
+			let readSmallSymbol = function(){
+				let head = smallHuffman;
+				while(head.isInternal){
+					if(readBit()){
+						head = head.right
+					}
+					else{
+						head = head.left
+					}
+				}
+				return head.symbol
+			}
+
+			let forige = 0;
+
+			let readColour = function(){
+				let head = colourHuffman;
+				while(head.isInternal){
+					if(readBit()){
+						head = head.right
+					}
+					else{
+						head = head.left
+					}
+				}
+				return parseInt(head.symbol)
+			}
+
+
+			let forbidden = [];
+			for(let i=0;i<width;i++){
+				forbidden.push(new Array(height).fill(false))
+			}
+
+			let write2x2 = function(curr,a,b,c,d){
+				if(curr.x + 1 < width){
+					if(curr.y + 1 < height){
+						currentEncode[curr.x][curr.y] = (currentEncode[curr.x][curr.y] + a) % table_ceiling;
+						currentEncode[curr.x + 1][curr.y] = (currentEncode[curr.x + 1][curr.y] + b) % table_ceiling;
+						currentEncode[curr.x + 1][curr.y + 1] = (currentEncode[curr.x + 1][curr.y + 1] + c) % table_ceiling;
+						currentEncode[curr.x][curr.y + 1] = (currentEncode[curr.x][curr.y + 1] + d) % table_ceiling;
+					}
+					else{
+						currentEncode[curr.x][curr.y] = (currentEncode[curr.x][curr.y] + a) % table_ceiling;
+						currentEncode[curr.x + 1][curr.y] = (currentEncode[curr.x + 1][curr.y] + b) % table_ceiling;
+					}
+				}
+				else{
+					if(curr.y + 1 < height){
+						currentEncode[curr.x][curr.y] = (currentEncode[curr.x][curr.y] + a) % table_ceiling;
+						currentEncode[curr.x][curr.y + 1] = (currentEncode[curr.x][curr.y + 1] + d) % table_ceiling;
+					}
+					else{
+						currentEncode[curr.x][curr.y] = (currentEncode[curr.x][curr.y] + a) % table_ceiling;
+					}
+				}
+			}
+
+			for(let size = encoding_size; size > 1;size = size/2){
+			for(let x = 0;x < width;x += size){
+			for(let y = 0;y < height;y += size){
+				let curr = {x: x,y: y,size: size};
+				if(forbidden[x][y]){
+					continue
+				}
+				if(curr.size > 2){
+					let symbol = readLargeSymbol();
+					if(symbol === "divide"){
+						//foo
+					}
+					else if(symbol === "STOP"){
+						for(let i=0;i<curr.size;i++){
+							for(let j=0;j<curr.size;j++){
+								if((curr.x + i) < width && (curr.y + j) < height){
+									forbidden[curr.x + i][curr.y + j] = true
+								}
+							}
+						}
+					}
+					else if(symbol === "whole"){
+						let colour = readColour();
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + colour) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "PREVIOUS"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i - curr.size][j]
+							}
+						}
+					}
+					else if(symbol === "TOP"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i][j - curr.size]
+							}
+						}
+					}
+					else if(symbol === "TOPLEFT"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i - curr.size][j - curr.size]
+							}
+						}
+					}
+					else if(symbol === "TOPRIGHT"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i + curr.size][j - curr.size]
+							}
+						}
+					}
+					else if(symbol === "PAETH"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i][j - curr.size] + currentEncode[i - curr.size][j] - currentEncode[i - curr.size][j - curr.size]
+							}
+						}
+					}
+					else if(symbol === "AVERAGE"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = Math.ceil((currentEncode[i][j - curr.size] + currentEncode[i - curr.size][j])/2)
+							}
+						}
+					}
+					else if(symbol === "vertical"){
+						let top = readColour();
+						let bottom = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "horizontal"){
+						let left = readColour();
+						let right = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "diagonal_NW"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "diagonal_NE"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "diagonal_solid_NW"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								if(
+									i + j - curr.x - curr.y < curr.size
+								){
+									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+								}
+								else{
+									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+								}
+							}
+						}
+					}
+					else if(symbol === "diagonal_solid_NE"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								if(
+									(curr.size - (i - curr.x) - 1) + j - curr.y < curr.size
+								){
+									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+								}
+								else{
+									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+								}
+							}
+						}
+					}
+					else if(symbol === "steep_NW"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_odd_solid(colour1,colour2,false,true,curr.size)
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "steep_NE"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_odd_solid(colour1,colour2,true,true,curr.size)
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "calm_NW"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_odd_solid(colour1,colour2,false,false,curr.size)
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "calm_NE"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_odd_solid(colour1,colour2,true,false,curr.size)
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "horizontal_third"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_third(colour1,colour2,false,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "horizontal_large_third"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_third(colour1,colour2,false,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "vertical_third"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_third(colour1,colour2,true,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "vertical_large_third"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_third(colour1,colour2,true,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "dip_NW"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_dip(colour1,colour2,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else if(symbol === "dip_NE"){
+						let colour1 = readColour();
+						let colour2 = readColour();
+						let patch = create_dip(colour1,colour2,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = (currentEncode[i][j] + patch[i - curr.x][j - curr.y]) % table_ceiling
+							}
+						}
+					}
+					else{
+						throw "unknown symbol: " + symbol
+					}
+				}
+				else{
+					let instruction = readSmallSymbol();
+					if(instruction === "STOP"){
+						//foo
+					}
+					else if(instruction === "PREVIOUS"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i - curr.size][j]
+							}
+						}
+					}
+					else if(instruction === "TOP"){
+						for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+							for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+								currentEncode[i][j] = currentEncode[i][j - curr.size]
+							}
+						}
+					}
+					else if(instruction === "pixels"){
+						write2x2(curr,readColour(),readColour(),readColour(),readColour())
+					}
+					else if(instruction === "whole"){
+						let colour = readColour();
+						write2x2(curr,colour,colour,colour,colour)
+					}
+					else if(instruction === "vertical"){
+						let topColour = readColour();
+						let bottomColour = readColour();
+						write2x2(curr,topColour,topColour,bottomColour,bottomColour)
+					}
+					else if(instruction === "horizontal"){
+						let leftColour = readColour();
+						let rightColour = readColour();
+						write2x2(curr,leftColour,rightColour,rightColour,leftColour)
+					}
+					else if(instruction === "diagonal_NW"){
+						let a = readColour();
+						let b = readColour();
+						let avg = Math.round((a+b)/2);
+						write2x2(curr,a,avg,b,avg)
+					}
+					else if(instruction === "diagonal_NE"){
+						let a = readColour();
+						let b = readColour();
+						let avg = Math.round((a+b)/2);
+						write2x2(curr,avg,a,avg,b)
+					}
+					else if(instruction === "diagonal_solid_NW"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,a,b,a)
+					}
+					else if(instruction === "diagonal_solid_NE"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,a,a,b)
+					}
+					else if(instruction === "diagonal_solid_SE"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,b,b,b)
+					}
+					else if(instruction === "diagonal_solid_SW"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,b,a,b,b)
+					}
+					else if(instruction === "diagonal_solid_SW"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,b,a,b,b)
+					}
+					else if(instruction === "cross"){
+						let a = readColour();
+						let b = readColour();
+						write2x2(curr,a,b,a,b)
+					}
+					else{
+						throw "unknown symbol: " + instruction
+					}
+				}
+			}}}
+		}
+		catch(e){
+			console.log(e);
+			for(let i=0;i<width;i++){
+				for(let j=0;j<height;j++){
+					channelData[i][j] = translationTable[currentEncode[i][j]]
+				}
+			}
+			return channelData
+		}
+		for(let i=0;i<width;i++){
+			for(let j=0;j<height;j++){
+				channelData[i][j] = translationTable[currentEncode[i][j]]
+			}
+		}
+		console.log("complete channel decoded");
+		return channelData
+	}
+	if(pixelFormat === "greyscale"){
+		channels.push(decodeChannel({bitDepth: 8}));
+		let rawData = multiplexChannels(channels);
+		return {
+			imageData: rgb_to_rgba(greyscale_to_rgb(rawData)),
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "yiq26"){
+		channels.push(decodeChannel({bitDepth: 8}));
+		channels.push(decodeChannel({bitDepth: 9}));
+		channels.push(decodeChannel({bitDepth: 9}));
+		let rawData = multiplexChannels(channels);
+		return {
+			imageData: rgb_to_rgba(yiq26_to_rgb(rawData)),
+			width: width,
+			height: height
+		}
+	}
+	else{
+		throw "only greyscale decoding supported so far"
+	}
 }
 
 

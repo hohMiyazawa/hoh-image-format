@@ -49,8 +49,6 @@ body{
 		<pre id="encodeStats"></pre>
 		<script src="hoh.js"></script>
 		<script>
-/*
-
 let saveByteArray = (function(){
 	let a = document.createElement("a");
 	document.body.appendChild(a);
@@ -89,49 +87,14 @@ function readFileAsArrayBuffer(file, success, error) {
 
 function drawToCanvas(imageData){
 	let canvas = document.getElementById("render");
-	canvas.width = imageData.luma.length;
-	canvas.height = imageData.luma[0].length || 0;
+	if(!imageData.imageData){
+		return
+	}
+	canvas.width = imageData.width;
+	canvas.height = imageData.height;
 	let ctx = canvas.getContext("2d");
-	if(imageData.Cb.length === 0){
-		imageData.luma.forEach((row,i) => {
-			row.forEach((cel,j) => {
-				ctx.fillStyle = "rgb(" + cel + "," + cel + "," + cel +")";
-				ctx.fillRect(i,j,1,1)
-			})
-		})
-	}
-	else{
-		let showFlat = [];
-		for(let i=0;i<imageData.luma[0].length;i++){
-			for(let j=0;j<imageData.luma.length;j++){
-				showFlat.push(
-					Math.round(imageData.luma[j][i] + imageData.Cb[j][i] - imageData.Cr[j][i]),
-					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 128),
-					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 256),
-					255
-				)
-			}
-		}
-		let image = new ImageData(new Uint8ClampedArray(showFlat),imageData.luma.length);
-		ctx.putImageData(image,0,0);
-	}
-}
-
-function hohStatsHandler(data){
-	document.getElementById("encodeStats").innerText = `
-compression: ${Math.round((1 - (data.size / (data.width * data.height * 3)))*10000)/100 + "%"}
-time: ${data.time + "ms"}
-
-huffman tables: ${data.huffman_tables} bytes
-
-size: ${data.size} bytes
-- header: 8 bytes
-- luma: ${data.luma} bytes
-- chroma: ${Math.max(data.chroma,0)} bytes
-
-luma macroblocks: ${Object.keys(data.blockUsage[0].large).reduce((acc,val) => acc + data.blockUsage[0].large[val],0)}
-${Object.keys(data.blockUsage[0].large).map(val => "- " + val + ": " + data.blockUsage[0].large[val]).join("\n")}
-`
+	let image = new ImageData(new Uint8ClampedArray(imageData.imageData),imageData.width);
+	ctx.putImageData(image,0,0);
 }
 
 const inputElement = document.getElementById("hohInput");
@@ -139,7 +102,7 @@ const inputElement = document.getElementById("hohInput");
 let html_decode = function(){
 	const fileList = inputElement.files;
 	readFileAsArrayBuffer(fileList[0], function(data){
-		let decodedData = decodeHoh(new Uint8Array(data));
+		let decodedData = decoder(new Uint8Array(data),{pixelFormat: "rgba"});
 		if(decodedData){
 			drawToCanvas(decodedData)
 		}
@@ -148,7 +111,7 @@ let html_decode = function(){
 	})
 }
 inputElement.addEventListener("change",html_decode,false);
-*/
+
 
 const inputElementEncode = document.getElementById("imageInput");
 const buttonElementEncode = document.getElementById("encodeButton");
@@ -169,9 +132,14 @@ let html_encode = function(){
 				let data = encoder(contextData,{
 					width: img.width,
 					height: img.height,
-					pixelFormat: "rgba"
+					pixelFormat: "rgba",
+					target_pixelFormat: "yiq26a",
+					maxBlockSize: 128,
+					useDCT: false,
+					optimizeChannels: true
 				});
-				console.log("final size:",data.length)
+				console.log("final size:",data.length);
+				saveByteArray([data], fileName + ".hoh");
 			});
 			img.src = e.target.result;
 		};       
