@@ -196,8 +196,8 @@ function multiplexChannels(channelArray){
 	let imageData = [];
 	let width = channelArray[0].length;
 	let height = channelArray[0][0].length;
-	for(let i=0;i<width;i++){
-		for(let j=0;j<height;j++){
+	for(let j=0;j<height;j++){
+		for(let i=0;i<width;i++){
 			for(let k=0;k<channelArray.length;k++){
 				imageData.push(channelArray[k][i][j])
 			}
@@ -227,19 +227,6 @@ function deMultiplexChannels(imageData,width,height){
 		}
 	}
 	return channelArray
-}
-
-function numberOfCombinations(channel1,channel2){
-	let combs = [];
-	for(let i=0;i<256;i++){
-		combs.push(new Array(512).fill(0))
-	}
-	for(let i=0;i<channel1.length;i++){
-		for(let j=0;j<channel1[0].length;j++){
-			combs[channel1[i][j]][channel2[i][j]]++;
-		}
-	}
-	console.log("Y - I",combs.flat().filter(a => a),combs.map(chroma => chroma.filter(a => a).length),combs.map(chroma => -chroma.findIndex(a => a) + (512 - chroma.reverse().findIndex(a => a))));
 }
 
 function createHuffman(freqs){
@@ -605,8 +592,6 @@ const smallSymbolTable = [
 	"STOP",
 	"vertical",
 	"horizontal",
-	"diagonal_NW",
-	"diagonal_NE",
 	"diagonal_solid_NW",
 	"diagonal_solid_NE",
 	"diagonal_solid_SW",
@@ -756,8 +741,6 @@ function encoder(imageData,options){
 			s_vertical: 0,
 			s_horizontal: 0,
 			s_pixels: 0,
-			s_diagonal_NW: 0,
-			s_diagonal_NE: 0,
 			s_diagonal_solid_NW: 0,
 			s_diagonal_solid_NE: 0,
 			s_diagonal_solid_SW: 0,
@@ -987,6 +970,12 @@ function encoder(imageData,options){
 		let sharpener = function(a,b,chuncker,resolver,symbol,tuning){
 			if(!tuning){
 				tuning = 1
+			}
+			if(a < 0){
+				a += table_ceiling
+			}
+			if(b < 0){
+				b += table_ceiling
 			}
 			let patch = chuncker(a,b);
 			let error = resolver(patch);
@@ -1727,26 +1716,6 @@ function encoder(imageData,options){
 					}
 					continue;
 				}
-				if(CHANNEL_LENGTH > 1){
-					let dia1_err = error_compare(create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2),chunck,0,0);
-					if(dia1_err === 0){
-						writeSmallSymbol("diagonal_NW");
-						writeByte(chunck[0][0]);
-						if(table_ceiling > 2){
-							writeByte(chunck[1][1])
-						}
-						continue
-					}
-					let dia2_err = error_compare(create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2),chunck,0,0);
-					if(dia2_err === 0){
-						writeSmallSymbol("diagonal_NE");
-						writeByte(chunck[1][0]);
-						if(table_ceiling > 2){
-							writeByte(chunck[0][1])
-						}
-						continue
-					}
-				}
 				if(
 					chunck[0][0] === chunck[1][0]
 					&& chunck[0][0] === chunck[0][1]
@@ -2119,7 +2088,6 @@ function encoder(imageData,options){
 		})
 	}
 
-	//numberOfCombinations(channels[0],channels[1])
 
 	if(bitBuffer.length){
 		while(bitBuffer.length < 8){
@@ -2279,42 +2247,65 @@ function decoder(hohData,options){
 			channelData.push(new Array(height).fill(0));
 			currentEncode.push(new Array(height).fill(0))
 		}
-		let flagBit1 = readBit();
-		let flagBit2 = readBit();
-		console.log(flagBit1,flagBit2);
-
 		let translationTable = [];
+		try{
+			let flagBit1 = readBit();
+			let flagBit2 = readBit();
+			console.log(flagBit1,flagBit2);
 
-		if(flagBit1 === 1 && flagBit2 === 1){
-			if(bitBuffer.length < (CHANNEL_LENGTH - 1) && currentIndex < hohData.length){
-				bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+			if(flagBit1 === 1 && flagBit2 === 1){
+				if(bitBuffer.length < (CHANNEL_LENGTH - 1) && currentIndex < hohData.length){
+					bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+				}
+				let ranges = dePlex(bitBuffer.splice(0,BYTE_LENGTH - 1));
+				let deltas = [];
+				for(let i=0;i<ranges*2;i++){
+					deltas.push(parseInt(readDelta()) + 1)
+				};
+				let colourAllowable;
+				let rangeActive = false;
+				deltas.forEach((delta,index) => {
+					if(index === 0){
+						colourAllowable = new Array(delta - 1).fill(rangeActive)
+					}
+					else{
+						colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
+					}
+					rangeActive = !rangeActive
+				});
+				colourAllowable.forEach((val,index) => {
+					if(val){
+						translationTable.push(index)
+					}
+				})
 			}
-			let ranges = dePlex(bitBuffer.splice(0,BYTE_LENGTH - 1));
-			console.log("range number",ranges);
-			let deltas = [];
-			for(let i=0;i<ranges*2;i++){
-				deltas.push(parseInt(readDelta()) + 1)
-			};
-			let colourAllowable;
-			let rangeActive = false;
-			let index = 0;
-			deltas.forEach((delta,index) => {
-				if(index === 0){
-					colourAllowable = new Array(delta - 1).fill(rangeActive)
+			else if(flagBit1 === 1 && flagBit2 === 0){
+				if(bitBuffer.length < CHANNEL_LENGTH && currentIndex < hohData.length){
+					bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
 				}
-				else{
-					colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
-				}
-				rangeActive = !rangeActive
-			});
-			colourAllowable.forEach((val,index) => {
-				if(val){
-					translationTable.push(index)
-				}
-			})
+				let occupied = dePlex(bitBuffer.splice(0,BYTE_LENGTH));
+				let deltas = [];
+				for(let i=0;i<occupied;i++){
+					deltas.push(parseInt(readDelta()) + 1)
+				};
+				let colourAllowable = [];
+				deltas.forEach((delta,index) => {
+					colourAllowable = colourAllowable.concat(new Array(delta - 1).fill(false))
+					colourAllowable.push(true)
+				});
+				colourAllowable.forEach((val,index) => {
+					if(val){
+						translationTable.push(index)
+					}
+				})
+			}
+			else{
+				throw "here we go again"
+			}
 		}
-		else{
-			throw "here we go again"
+		catch(e){
+			console.log(e);
+			return channelData
 		}
 		try{
 			let table_ceiling = translationTable.length;
@@ -2518,7 +2509,7 @@ function decoder(hohData,options){
 									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
 								}
 								else{
-									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+									currentEncode[i][j] = (currentEncode[i][j] + colour2) % table_ceiling
 								}
 							}
 						}
@@ -2534,7 +2525,7 @@ function decoder(hohData,options){
 									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
 								}
 								else{
-									currentEncode[i][j] = (currentEncode[i][j] + colour1) % table_ceiling
+									currentEncode[i][j] = (currentEncode[i][j] + colour2) % table_ceiling
 								}
 							}
 						}
@@ -2678,18 +2669,6 @@ function decoder(hohData,options){
 						let leftColour = readColour();
 						let rightColour = readColour();
 						write2x2(curr,leftColour,rightColour,rightColour,leftColour)
-					}
-					else if(instruction === "diagonal_NW"){
-						let a = readColour();
-						let b = readColour();
-						let avg = Math.round((a+b)/2);
-						write2x2(curr,a,avg,b,avg)
-					}
-					else if(instruction === "diagonal_NE"){
-						let a = readColour();
-						let b = readColour();
-						let avg = Math.round((a+b)/2);
-						write2x2(curr,avg,a,avg,b)
 					}
 					else if(instruction === "diagonal_solid_NW"){
 						let a = readColour();
