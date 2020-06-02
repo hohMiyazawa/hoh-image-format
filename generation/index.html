@@ -42,7 +42,6 @@ body{
 		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.2<br>
 		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
 		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
-		Brute-force block colours: <input id="bruteForce" type="checkbox"><br>
 		Use DCT blocks: <input id="useDCT" type="checkbox"><br>
 		<button id="encodeButton">encode again</button>
 		<h4>Stats:</h4>
@@ -135,7 +134,7 @@ let html_encode = function(){
 					pixelFormat: "rgba",
 					target_pixelFormat: "yiq26a",
 					maxBlockSize: 128,
-					useDCT: false,
+					useDCT: document.getElementById("useDCT").checked,
 					optimizeChannels: true
 				});
 				console.log("final size:",data.length);
