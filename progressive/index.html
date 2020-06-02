@@ -39,8 +39,7 @@ body{
 		<h3>Encode</h3>
 		<input type="file" id="imageInput"><br>
 		<h4>Parameters:</h4>
-		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.2<br>
-		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
+		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="1"> 0 = lossless. Higher number = more lossy.<br>
 		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
 		Use DCT blocks: <input id="useDCT" type="checkbox"><br>
 		<button id="encodeButton">encode again</button>
@@ -135,7 +134,8 @@ let html_encode = function(){
 					target_pixelFormat: "yiq26a",
 					maxBlockSize: 128,
 					useDCT: document.getElementById("useDCT").checked,
-					optimizeChannels: true
+					optimizeChannels: true,
+					quantizer: parseInt(document.getElementById("quantizer").value)
 				});
 				console.log("final size:",data.length);
 				saveByteArray([data], fileName + ".hoh");

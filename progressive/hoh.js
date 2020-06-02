@@ -892,22 +892,142 @@ function encoder(imageData,options){
 		}
 
 		let error_compare = function(chunck1,chunck2,offx,offy){
-			let sumError = 0;
-			for(let i=0;i<chunck1.length;i++){
-				for(let j=0;j<chunck1[i].length;j++){
-					if(offx + i < width && offy + j < height){
-						let diff = Math.abs(
-							chunck2[i][j] - chunck1[i][j]
-						) % table_ceiling;
-						let error = Math.pow(
-							Math.min(diff,table_ceiling - diff),
-							2
-						)
-						sumError += error
+			if(
+				false
+				&& chunck1.length === 4
+				&& offx >= 2 && offy >= 2
+				&& (offx + 4) <= width
+				&& (offy + 4) <= height
+			){
+				let sumError = 0;
+				if(!(
+					(
+						channelData[offx][offy] === channelData[offx - 2][offy]
+						&& channelData[offx + 1][offy] === channelData[offx - 1][offy]
+						&& channelData[offx + 1][offy + 1] === channelData[offx - 1][offy + 1]
+						&& channelData[offx][offy + 1] === channelData[offx - 2][offy + 1]
+					)
+					|| (
+						channelData[offx][offy] === channelData[offx][offy - 2]
+						&& channelData[offx + 1][offy] === channelData[offx + 1][offy - 2]
+						&& channelData[offx + 1][offy + 1] === channelData[offx + 1][offy - 1]
+						&& channelData[offx][offy + 1] === channelData[offx][offy - 1]
+					)
+				)){
+					for(let i=0;i<2;i++){
+						for(let j=0;j<2;j++){
+							let diff = Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							) % table_ceiling;
+							let error = Math.pow(
+								Math.min(diff,table_ceiling - diff),
+								2
+							)
+							sumError += error
+						}
 					}
 				}
+				if(!(
+					(
+						channelData[offx + 2][offy] === channelData[offx][offy]
+						&& channelData[offx + 3][offy] === channelData[offx + 1][offy]
+						&& channelData[offx + 3][offy + 1] === channelData[offx + 1][offy + 1]
+						&& channelData[offx + 2][offy + 1] === channelData[offx][offy + 1]
+					)
+					|| (
+						channelData[offx + 2][offy] === channelData[offx + 2][offy - 2]
+						&& channelData[offx + 3][offy] === channelData[offx + 3][offy - 2]
+						&& channelData[offx + 3][offy + 1] === channelData[offx + 3][offy - 1]
+						&& channelData[offx + 2][offy + 1] === channelData[offx + 2][offy - 1]
+					)
+				)){
+					for(let i=2;i<4;i++){
+						for(let j=0;j<2;j++){
+							let diff = Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							) % table_ceiling;
+							let error = Math.pow(
+								Math.min(diff,table_ceiling - diff),
+								2
+							)
+							sumError += error
+						}
+					}
+				}
+				if(!(
+					(
+						channelData[offx + 2][offy + 2] === channelData[offx - 2][offy + 2]
+						&& channelData[offx + 3][offy + 2] === channelData[offx - 1][offy + 2]
+						&& channelData[offx + 3][offy + 3] === channelData[offx - 1][offy + 3]
+						&& channelData[offx + 2][offy + 3] === channelData[offx - 2][offy + 3]
+					)
+					|| (
+						channelData[offx + 2][offy + 2] === channelData[offx + 2][offy]
+						&& channelData[offx + 3][offy + 2] === channelData[offx + 3][offy]
+						&& channelData[offx + 3][offy + 3] === channelData[offx + 3][offy + 1]
+						&& channelData[offx + 2][offy + 3] === channelData[offx + 2][offy + 1]
+					)
+				)){
+					for(let i=2;i<4;i++){
+						for(let j=2;j<4;j++){
+							let diff = Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							) % table_ceiling;
+							let error = Math.pow(
+								Math.min(diff,table_ceiling - diff),
+								2
+							)
+							sumError += error
+						}
+					}
+				}
+				if(!(
+					(
+						channelData[offx][offy + 2] === channelData[offx - 2][offy + 2]
+						&& channelData[offx + 1][offy + 2] === channelData[offx - 1][offy + 2]
+						&& channelData[offx + 1][offy + 3] === channelData[offx - 1][offy + 3]
+						&& channelData[offx][offy + 3] === channelData[offx - 2][offy + 3]
+					)
+					|| (
+						channelData[offx][offy + 2] === channelData[offx][offy]
+						&& channelData[offx + 1][offy + 2] === channelData[offx + 1][offy]
+						&& channelData[offx + 1][offy + 3] === channelData[offx + 1][offy + 1]
+						&& channelData[offx][offy + 3] === channelData[offx][offy + 1]
+					)
+				)){
+					for(let i=0;i<2;i++){
+						for(let j=2;j<4;j++){
+							let diff = Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							) % table_ceiling;
+							let error = Math.pow(
+								Math.min(diff,table_ceiling - diff),
+								2
+							)
+							sumError += error
+						}
+					}
+				}
+				return sumError/16
 			}
-			return sumError/(chunck1.length * chunck1[0].length)
+			else{
+				let sumError = 0;
+				for(let i=0;i<chunck1.length;i++){
+					for(let j=0;j<chunck1[i].length;j++){
+						if(offx + i < width && offy + j < height){
+							let diff = Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							) % table_ceiling;
+							let error = Math.pow(
+								Math.min(diff,table_ceiling - diff),
+								2
+							)
+							sumError += error
+						}
+					}
+				}
+				return sumError/(chunck1.length * chunck1[0].length)
+			}
 		}
 		const get_chunck = function(x,y,size){
 			let data = [];
@@ -1115,12 +1235,12 @@ function encoder(imageData,options){
 			}
 
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
-			let perfect = chunck.flat().filter(a => a).length === 0;
+			let perfect = chunck.flat().map(a => Math.abs(a)).sort((b,a) => a - b)[0];
 			if(curr.size > 200){
 				//console.log(curr.size,chunck.flat().map(a => a).length,JSON.parse(JSON.stringify(chunck)))
 			}
 			if(curr.size >= 4){
-				if(perfect){
+				if(perfect <= options.quantizer){
 					writeLargeSymbol("STOP");
 					for(let i=0;i<curr.size;i++){
 						for(let j=0;j<curr.size;j++){
@@ -1657,7 +1777,7 @@ function encoder(imageData,options){
 				//writeLargeSymbol("divide");
 			}
 			else if(curr.size === 2){
-				if(perfect){
+				if(perfect <= options.quantizer){
 					writeSmallSymbol("STOP");
 					continue;
 				}
@@ -2005,12 +2125,14 @@ function encoder(imageData,options){
 				encodedData.push(dePlex(bitBuffer.splice(0,8)))
 			}
 		});
-		for(let i=0;i<width;i++){
-			for(let j=0;j<height;j++){
-				if(currentEncode[i][j] !== channelData[i][j]){
-					console.log(currentEncode[i][j],channelData[i][j],"i",i,"j",j);
-					console.log("forbidden",forbidden[i][j])
-					throw "bad encode"
+		if(options.quantizer === 0){
+			for(let i=0;i<width;i++){
+				for(let j=0;j<height;j++){
+					if(currentEncode[i][j] !== channelData[i][j]){
+						console.log(currentEncode[i][j],channelData[i][j],"i",i,"j",j);
+						console.log("forbidden",forbidden[i][j])
+						throw "bad encode"
+					}
 				}
 			}
 		}
@@ -2041,7 +2163,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2049,7 +2171,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[1],{
 			bitDepth: 9,
 			name: "I",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2057,7 +2179,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[2],{
 			bitDepth: 9,
 			name: "Q",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2075,7 +2197,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2083,7 +2205,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[1],{
 			bitDepth: 9,
 			name: "I",
-			quantizer: 0,
+			quantizer: options.quantizer*1.5,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2091,7 +2213,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[2],{
 			bitDepth: 9,
 			name: "Q",
-			quantizer: 0,
+			quantizer: options.quantizer*1.5,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2101,7 +2223,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "r",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2109,7 +2231,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[1],{
 			bitDepth: 8,
 			name: "g",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2117,7 +2239,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[2],{
 			bitDepth: 8,
 			name: "b",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
@@ -2135,7 +2257,7 @@ function encoder(imageData,options){
 		encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
-			quantizer: 0,
+			quantizer: options.quantizer,
 			force: false,
 			useDCT: options.useDCT,
 			maxBlockSize: options.maxBlockSize
