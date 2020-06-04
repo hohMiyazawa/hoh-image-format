@@ -72,6 +72,57 @@ function create_diagonal_gradient(colour1,colour2,direction,size){
 	return data
 }
 
+function create_diagonal_half_solid(colour1,colour2,direction,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(direction === 0){
+				if(i + j < size){
+					col.push(colour1)
+				}
+				else{
+					col.push(Math.round(
+						colour1 + (colour2 - colour1) * (i + j - size + 1)/(size - 1)
+					))
+				}
+			}
+			else if(direction === 1){
+				if((size - i - 1) + j < size){
+					col.push(colour1)
+				}
+				else{
+					col.push(Math.round(
+						colour1 + (colour2 - colour1) * ((size - i - 1) + j - size + 1)/(size - 1)
+					))
+				}
+			}
+			else if(direction === 2){
+				if((size - i - 1) + (size - j - 1) < size){
+					col.push(colour1)
+				}
+				else{
+					col.push(Math.round(
+						colour1 + (colour2 - colour1) * ((size - i - 1) + (size - j - 1) - size + 1)/(size - 1)
+					))
+				}
+			}
+			else if(direction === 3){
+				if(i + (size - j - 1) < size){
+					col.push(colour1)
+				}
+				else{
+					col.push(Math.round(
+						colour1 + (colour2 - colour1) * (i + (size - j - 1) - size + 1)/(size - 1)
+					))
+				}
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 function create_diagonal_solid(colour1,colour2,direction,size){
 	let data = []
 	for(let i=0;i<size;i++){
@@ -452,7 +503,19 @@ const largeSymbolTable = [
 	"dct32",
 	"dct23",
 	"PREVIOUS",
-	"PREVIOUS2"
+	"PREVIOUS2",
+	"PREVIOUS3",
+	"PREVIOUS4",
+	"PREVIOUS5",
+	"PREVIOUS6",
+	"PREVIOUS7",
+	"PREVIOUS8",
+	"PREVIOUS9",
+	"PREVIOUS10",
+	"diagonal_half_NW",
+	"diagonal_half_NE",
+	"diagonal_half_SE",
+	"diagonal_half_SW"
 ]
 
 const quads = new Array(16);
@@ -569,6 +632,27 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			data.push(col)
 		}
 		return data
+	}
+
+	function compare_pre(curr1,curr2){
+		if(
+			(!curr1) || (!curr2)
+			|| curr1.size !== curr2.size
+			|| (curr1.x + curr1.size) >= width
+			|| (curr2.x + curr2.size) >= width
+			|| (curr1.y + curr1.size) >= height
+			|| (curr2.y + curr2.size) >= height
+		){
+			return false
+		}
+		for(let i=0;i<curr1.size;i++){
+			for(let j=0;j<curr1.size;j++){
+				if(imageData[curr1.x + i][curr1.y + j] !== imageData[curr2.x + i][curr2.y + j]){
+					return false
+				}
+			}
+		}
+		return true
 	}
 
 	let find_average = function(chunck){
@@ -769,7 +853,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size - 4,
 					size: 4
 				})
-				if(previous4x4_curr.length > 3){
+				if(previous4x4_curr.length > 15){
 					previous4x4_curr.shift()
 				}
 			}
@@ -779,7 +863,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size - 8,
 					size: 8
 				})
-				if(previous8x8_curr.length > 3){
+				if(previous8x8_curr.length > 15){
 					previous8x8_curr.shift()
 				}
 			}
@@ -789,7 +873,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size - 16,
 					size: 16
 				})
-				if(previous16x16_curr.length > 3){
+				if(previous16x16_curr.length > 15){
 					previous16x16_curr.shift()
 				}
 			}
@@ -799,7 +883,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					y: curr.y + curr.size - 32,
 					size: 32
 				})
-				if(previous32x32_curr.length > 3){
+				if(previous32x32_curr.length > 15){
 					previous32x32_curr.shift()
 				}
 			}
@@ -922,6 +1006,78 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							colours: []
 						})
 					}
+					if(previous4x4_curr.length >= 4){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 4].x,previous4x4_curr[previous4x4_curr.length - 4].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS3",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 5){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 5].x,previous4x4_curr[previous4x4_curr.length - 5].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS4",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 6){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 6].x,previous4x4_curr[previous4x4_curr.length - 6].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS5",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 7){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 7].x,previous4x4_curr[previous4x4_curr.length - 7].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS6",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 8){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 8].x,previous4x4_curr[previous4x4_curr.length - 8].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS7",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 9){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 9].x,previous4x4_curr[previous4x4_curr.length - 9].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS8",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 10){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 10].x,previous4x4_curr[previous4x4_curr.length - 10].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS9",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous4x4_curr.length >= 11){
+						let patch = get_chunck_encode(previous4x4_curr[previous4x4_curr.length - 11].x,previous4x4_curr[previous4x4_curr.length - 11].y,4);
+						errorQueue.push({
+							symbol: "PREVIOUS10",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
 				}
 				else if(curr.size === 8){
 					if(previous8x8_curr.length >= 2){
@@ -937,6 +1093,78 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 3].x,previous8x8_curr[previous8x8_curr.length - 3].y,8);
 						errorQueue.push({
 							symbol: "PREVIOUS2",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 4){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 4].x,previous8x8_curr[previous8x8_curr.length - 4].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS3",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 5){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 5].x,previous8x8_curr[previous8x8_curr.length - 5].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS4",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 6){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 6].x,previous8x8_curr[previous8x8_curr.length - 6].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS5",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 7){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 7].x,previous8x8_curr[previous8x8_curr.length - 7].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS6",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 8){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 8].x,previous8x8_curr[previous8x8_curr.length - 8].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS7",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 9){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 9].x,previous8x8_curr[previous8x8_curr.length - 9].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS8",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 10){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 10].x,previous8x8_curr[previous8x8_curr.length - 10].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS9",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous8x8_curr.length >= 11){
+						let patch = get_chunck_encode(previous8x8_curr[previous8x8_curr.length - 11].x,previous8x8_curr[previous8x8_curr.length - 11].y,8);
+						errorQueue.push({
+							symbol: "PREVIOUS10",
 							error: error_compare(chunck,patch,curr.x,curr.y),
 							patch: patch,
 							colours: []
@@ -962,20 +1190,175 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 							colours: []
 						})
 					}
+					if(previous16x16_curr.length >= 4){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 4].x,previous16x16_curr[previous16x16_curr.length - 4].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS3",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 5){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 5].x,previous16x16_curr[previous16x16_curr.length - 5].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS4",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 6){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 6].x,previous16x16_curr[previous16x16_curr.length - 6].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS5",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 7){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 7].x,previous16x16_curr[previous16x16_curr.length - 7].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS6",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 8){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 8].x,previous16x16_curr[previous16x16_curr.length - 8].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS7",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 9){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 9].x,previous16x16_curr[previous16x16_curr.length - 9].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS8",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 10){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 10].x,previous16x16_curr[previous16x16_curr.length - 10].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS9",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous16x16_curr.length >= 11){
+						let patch = get_chunck_encode(previous16x16_curr[previous16x16_curr.length - 11].x,previous16x16_curr[previous16x16_curr.length - 11].y,16);
+						errorQueue.push({
+							symbol: "PREVIOUS10",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
 				}
-				else if(curr.size === 32 && previous32x32_curr.length === 2){
-					let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 2].x,previous32x32_curr[previous32x32_curr.length - 2].y,32);
-					errorQueue.push({
-						symbol: "PREVIOUS",
-						error: error_compare(chunck,patch,curr.x,curr.y),
-						patch: patch,
-						colours: []
-					})
+				else if(curr.size === 32){
+					if(previous32x32_curr.length >= 2){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 2].x,previous32x32_curr[previous32x32_curr.length - 2].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 3){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 3].x,previous32x32_curr[previous32x32_curr.length - 3].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS2",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 4){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 4].x,previous32x32_curr[previous32x32_curr.length - 4].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS3",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 5){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 5].x,previous32x32_curr[previous32x32_curr.length - 5].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS4",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 6){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 6].x,previous32x32_curr[previous32x32_curr.length - 6].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS5",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 7){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 7].x,previous32x32_curr[previous32x32_curr.length - 7].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS6",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 8){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 8].x,previous32x32_curr[previous32x32_curr.length - 8].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS7",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 9){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 9].x,previous32x32_curr[previous32x32_curr.length - 9].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS8",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 10){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 10].x,previous32x32_curr[previous32x32_curr.length - 10].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS9",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
+					if(previous32x32_curr.length >= 11){
+						let patch = get_chunck_encode(previous32x32_curr[previous32x32_curr.length - 11].x,previous32x32_curr[previous32x32_curr.length - 11].y,32);
+						errorQueue.push({
+							symbol: "PREVIOUS10",
+							error: error_compare(chunck,patch,curr.x,curr.y),
+							patch: patch,
+							colours: []
+						})
+					}
 				}
 
 
 
-				if(true || options.quantizer > 0){
+				if(options.quantizer > 0 || (!monochrome)){
 					let left_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[9] + mArr[12] + mArr[13]
 						+ mArr[2]/2 + mArr[6]/2 + mArr[10]/2 + mArr[14]/2
@@ -1081,6 +1464,35 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						(a,b) => create_diagonal_solid(a,b,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_solid_NE"
+					))
+
+					errorQueue.push(sharpener(
+						NW_s,
+						SE,
+						(a,b) => create_diagonal_half_solid(a,b,0,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"diagonal_half_NW"
+					))
+					errorQueue.push(sharpener(
+						NE_s,
+						SW,
+						(a,b) => create_diagonal_half_solid(a,b,1,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"diagonal_half_NE"
+					))
+					errorQueue.push(sharpener(
+						SE_s,
+						NW,
+						(a,b) => create_diagonal_half_solid(a,b,2,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"diagonal_half_SE"
+					))
+					errorQueue.push(sharpener(
+						SW_s,
+						NE,
+						(a,b) => create_diagonal_half_solid(a,b,3,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"diagonal_half_SW"
 					))
 
 					errorQueue.push(sharpener(
@@ -1280,7 +1692,10 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 						x: curr.x,
 						y: curr.y + curr.size - 2,
 						size: 2
-					})
+					});
+					/*if(compare_pre(curr,blockQueue[blockQueue.length - 1]) && errorQueue[0].error > 0 && !["PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10"].includes(errorQueue[0].symbol)){
+						console.log("pre",errorQueue[0].symbol,errorQueue[0].error,localQuantizer)
+					}*/
 					continue
 				}
 				writeLargeSymbol("divide");
@@ -1312,32 +1727,34 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				}
 				let chunck_previous1;
 				let chunck_previous2;
-				if(previous2x2_curr.length > 1){
-					chunck_previous1 = get_chunck_encode(previous2x2_curr[previous2x2_curr.length - 2].x,previous2x2_curr[previous2x2_curr.length - 2].y,2);
-					if(
-						chunck[0][0] === chunck_previous1[0][0]
-						&& chunck[1][0] === chunck_previous1[1][0]
-						&& chunck[0][1] === chunck_previous1[0][1]
-						&& chunck[1][1] === chunck_previous1[1][1]
-					){
-						writeSymbol("PREVIOUS");
-						stats.small_previous++;
-						write_chunck(curr,chunck);
-						continue;
+				if(!monochrome){
+					if(previous2x2_curr.length > 1){
+						chunck_previous1 = get_chunck_encode(previous2x2_curr[previous2x2_curr.length - 2].x,previous2x2_curr[previous2x2_curr.length - 2].y,2);
+						if(
+							chunck[0][0] === chunck_previous1[0][0]
+							&& chunck[1][0] === chunck_previous1[1][0]
+							&& chunck[0][1] === chunck_previous1[0][1]
+							&& chunck[1][1] === chunck_previous1[1][1]
+						){
+							writeSymbol("PREVIOUS");
+							stats.small_previous++;
+							write_chunck(curr,chunck);
+							continue;
+						}
 					}
-				}
-				if(previous2x2_curr.length > 2){
-					chunck_previous2 = get_chunck_encode(previous2x2_curr[previous2x2_curr.length - 3].x,previous2x2_curr[previous2x2_curr.length - 3].y,2);
-					if(
-						chunck[0][0] === chunck_previous2[0][0]
-						&& chunck[1][0] === chunck_previous2[1][0]
-						&& chunck[0][1] === chunck_previous2[0][1]
-						&& chunck[1][1] === chunck_previous2[1][1]
-					){
-						writeSymbol("PREVIOUS2");
-						stats.small_previous++;
-						write_chunck(curr,chunck);
-						continue;
+					if(previous2x2_curr.length > 2){
+						chunck_previous2 = get_chunck_encode(previous2x2_curr[previous2x2_curr.length - 3].x,previous2x2_curr[previous2x2_curr.length - 3].y,2);
+						if(
+							chunck[0][0] === chunck_previous2[0][0]
+							&& chunck[1][0] === chunck_previous2[1][0]
+							&& chunck[0][1] === chunck_previous2[0][1]
+							&& chunck[1][1] === chunck_previous2[1][1]
+						){
+							writeSymbol("PREVIOUS2");
+							stats.small_previous++;
+							write_chunck(curr,chunck);
+							continue;
+						}
 					}
 				}
 				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
@@ -1383,7 +1800,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				if(dia1_err === 0){
 					writeSymbol("diagonal_NW");
 					writeByte(chunck[0][0]);
-					writeByte(chunck[1][1]);
+					if(!monochrome){
+						writeByte(chunck[1][1])
+					}
 					stats.small_diagonals++;
 					write_chunck(curr,chunck);
 					continue
@@ -1393,7 +1812,9 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 				if(dia2_err === 0){
 					writeSymbol("diagonal_NE");
 					writeByte(chunck[1][0]);
-					writeByte(chunck[0][1]);
+					if(!monochrome){
+						writeByte(chunck[0][1])
+					}
 					stats.small_diagonals++;
 					write_chunck(curr,chunck);
 					continue
@@ -1450,7 +1871,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 					write_chunck(curr,chunck);
 					continue
 				}
-				if(options.lossySmallGradients && options.quantizer){
+				if(options.lossySmallGradients && options.quantizer && (!monochrome)){
 
 					let errorQueue = [];
 					errorQueue.push({
@@ -1600,8 +2021,8 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 		},0)
 
-		/*console.log("ifr",integerFrequency);
 		console.log("clb",colourBook);
+		/*console.log("ifr",integerFrequency);
 		console.log("pre-usage",preUsage);
 		console.log("post-usage",postUsage);*/
 
@@ -2011,7 +2432,7 @@ function decodeHoh(hohData){
 						y: curr.y + curr.size - 4,
 						size: 4
 					})
-					if(previous4x4_curr.length > 3){
+					if(previous4x4_curr.length > 15){
 						previous4x4_curr.shift()
 					}
 				}
@@ -2021,7 +2442,7 @@ function decodeHoh(hohData){
 						y: curr.y + curr.size - 8,
 						size: 8
 					})
-					if(previous8x8_curr.length > 3){
+					if(previous8x8_curr.length > 15){
 						previous8x8_curr.shift()
 					}
 				}
@@ -2031,7 +2452,7 @@ function decodeHoh(hohData){
 						y: curr.y + curr.size - 16,
 						size: 16
 					})
-					if(previous16x16_curr.length > 3){
+					if(previous16x16_curr.length > 15){
 						previous16x16_curr.shift()
 					}
 				}
@@ -2041,7 +2462,7 @@ function decodeHoh(hohData){
 						y: curr.y + curr.size - 32,
 						size: 32
 					})
-					if(previous32x32_curr.length > 3){
+					if(previous32x32_curr.length > 15){
 						previous32x32_curr.shift()
 					}
 				}
@@ -2112,6 +2533,166 @@ function decodeHoh(hohData){
 					}
 					else if(curr.size === 32){
 						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 3].x,previous32x32_curr[previous32x32_curr.length - 3].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS3"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 4].x,previous4x4_curr[previous4x4_curr.length - 4].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 4].x,previous8x8_curr[previous8x8_curr.length - 4].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 4].x,previous16x16_curr[previous16x16_curr.length - 4].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 4].x,previous32x32_curr[previous32x32_curr.length - 4].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS4"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 5].x,previous4x4_curr[previous4x4_curr.length - 5].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 5].x,previous8x8_curr[previous8x8_curr.length - 5].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 5].x,previous16x16_curr[previous16x16_curr.length - 5].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 5].x,previous32x32_curr[previous32x32_curr.length - 5].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS5"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 6].x,previous4x4_curr[previous4x4_curr.length - 6].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 6].x,previous8x8_curr[previous8x8_curr.length - 6].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 6].x,previous16x16_curr[previous16x16_curr.length - 6].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 6].x,previous32x32_curr[previous32x32_curr.length - 6].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS6"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 7].x,previous4x4_curr[previous4x4_curr.length - 7].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 7].x,previous8x8_curr[previous8x8_curr.length - 7].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 7].x,previous16x16_curr[previous16x16_curr.length - 7].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 7].x,previous32x32_curr[previous32x32_curr.length - 7].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS7"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 8].x,previous4x4_curr[previous4x4_curr.length - 8].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 8].x,previous8x8_curr[previous8x8_curr.length - 8].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 8].x,previous16x16_curr[previous16x16_curr.length - 8].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 8].x,previous32x32_curr[previous32x32_curr.length - 8].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS8"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 9].x,previous4x4_curr[previous4x4_curr.length - 9].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 9].x,previous8x8_curr[previous8x8_curr.length - 9].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 9].x,previous16x16_curr[previous16x16_curr.length - 9].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 9].x,previous32x32_curr[previous32x32_curr.length - 9].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS9"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 10].x,previous4x4_curr[previous4x4_curr.length - 10].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 10].x,previous8x8_curr[previous8x8_curr.length - 10].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 10].x,previous16x16_curr[previous16x16_curr.length - 10].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 10].x,previous32x32_curr[previous32x32_curr.length - 10].y,32)
+					}
+					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
+						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
+							imageData[i][j] = chunck_previous[i - curr.x][j - curr.y]
+						}
+					}
+				}
+				else if(instruction === "PREVIOUS10"){
+					let chunck_previous;
+					if(curr.size === 4){
+						chunck_previous = get_chunck(previous4x4_curr[previous4x4_curr.length - 11].x,previous4x4_curr[previous4x4_curr.length - 11].y,4)
+					}
+					else if(curr.size === 8){
+						chunck_previous = get_chunck(previous8x8_curr[previous8x8_curr.length - 11].x,previous8x8_curr[previous8x8_curr.length - 11].y,8)
+					}
+					else if(curr.size === 16){
+						chunck_previous = get_chunck(previous16x16_curr[previous16x16_curr.length - 11].x,previous16x16_curr[previous16x16_curr.length - 11].y,16)
+					}
+					else if(curr.size === 32){
+						chunck_previous = get_chunck(previous32x32_curr[previous32x32_curr.length - 11].x,previous32x32_curr[previous32x32_curr.length - 11].y,32)
 					}
 					for(let i=curr.x;i<curr.x + curr.size && i < width;i++){
 						for(let j=curr.y;j<curr.y + curr.size && j < height;j++){
@@ -2192,6 +2773,46 @@ function decodeHoh(hohData){
 							else{
 								imageData[i][j] = colour2
 							}
+						}
+					}
+				}
+				else if(instruction === "diagonal_half_NW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_diagonal_half_solid(colour1,colour2,0,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "diagonal_half_NE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_diagonal_half_solid(colour1,colour2,1,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "diagonal_half_SE"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_diagonal_half_solid(colour1,colour2,2,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
+						}
+					}
+				}
+				else if(instruction === "diagonal_half_SW"){
+					let colour1 = readColour();
+					let colour2 = readColour();
+					let patch = create_diagonal_half_solid(colour1,colour2,3,curr.size)
+					for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+						for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+							imageData[i][j] = patch[i - curr.x][j - curr.y];
 						}
 					}
 				}
@@ -2377,12 +2998,10 @@ function decodeHoh(hohData){
 				}
 				else{
 					if(instruction === "PREVIOUS"){
-						//write2x2(curr,readColour(),readColour(),readColour(),readColour())
 						let chunck_previous = get_chunck(previous2x2_curr[previous2x2_curr.length - 2].x,previous2x2_curr[previous2x2_curr.length - 2].y,2);
 						write2x2(curr,chunck_previous[0][0],chunck_previous[1][0],chunck_previous[1][1],chunck_previous[0][1])
 					}
 					if(instruction === "PREVIOUS2"){
-						//write2x2(curr,readColour(),readColour(),readColour(),readColour())
 						let chunck_previous = get_chunck(previous2x2_curr[previous2x2_curr.length - 3].x,previous2x2_curr[previous2x2_curr.length - 3].y,2);
 						write2x2(curr,chunck_previous[0][0],chunck_previous[1][0],chunck_previous[1][1],chunck_previous[0][1])
 					}
