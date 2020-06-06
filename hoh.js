@@ -2739,12 +2739,6 @@ function encoder(imageData,options){
 					let SW_avg = Math.round((chunck[0][0] + chunck[0][1] + chunck[1][1])/3);
 					let SE_avg = Math.round((chunck[1][0] + chunck[0][1] + chunck[1][1])/3);
 
-					let lossyVertical_patch = [[upper_avg,lower_avg],[upper_avg,lower_avg]];
-					let lossyVerticalError = error_compare(lossyVertical_patch,chunck,0,0);
-
-					let lossyHorizontal_patch = [[left_avg,left_avg],[right_avg,right_avg]];
-					let lossyHorizontalError = error_compare(lossyHorizontal_patch,chunck,0,0);
-
 					let solid1_patch = [[NW_avg,NW_avg],[NW_avg,chunck[1][1]]];
 					let solid1Error = error_compare(solid1_patch,chunck,0,0);
 
@@ -2757,12 +2751,16 @@ function encoder(imageData,options){
 					let weird2_patch = [[SW_avg,SW_avg],[chunck[1][0],SW_avg]];
 					let weird2Error = error_compare(weird2_patch,chunck,0,0);
 
+					let lossyVertical_patch = [[upper_avg,lower_avg],[upper_avg,lower_avg]];
+					let lossyVerticalError = error_compare(lossyVertical_patch,chunck,0,0);
 					errorQueue.push({
 						symbol: "vertical",
 						error: lossyVerticalError,
 						patch: lossyVertical_patch,
 						colours: [upper_avg,lower_avg]
 					})
+					let lossyHorizontal_patch = [[left_avg,left_avg],[right_avg,right_avg]];
+					let lossyHorizontalError = error_compare(lossyHorizontal_patch,chunck,0,0);
 					errorQueue.push({
 						symbol: "horizontal",
 						error: lossyHorizontalError,
@@ -2892,6 +2890,7 @@ function encoder(imageData,options){
 			DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
 		}
 		let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
+
 		let DEBUG_four_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
 		/*let DEBUG_large_f = new FrequencyTable(
 			largeSymbolTable.map(symbol => largeSymbolFrequency[symbol])
@@ -3288,8 +3287,12 @@ function decoder(hohData,options){
 						translationTable.push(i)
 					}
 				}
-				else{
-					throw "here we go again"
+				else if(flagBit1 === 0 && flagBit2 === 1){
+					for(let i=0;i<CHANNEL_POWER;i++){
+						if(readBit()){
+							translationTable.push(i)
+						}
+					}
 				}
 			}
 			else{
