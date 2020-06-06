@@ -2541,9 +2541,16 @@ function encoder(imageData,options){
 						)
 					){
 						writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-						errorQueue[0].colours.forEach(colour => {
-							writeByte(colour);
-						});
+						if(table_ceiling === 2){
+							if(errorQueue[0].colours.length){
+								writeByte(errorQueue[0].colours[0])
+							}
+						}
+						else{
+							errorQueue[0].colours.forEach(colour => {
+								writeByte(colour);
+							})
+						}
 						for(let i=0;i < curr.size && (i + curr.x) < width;i++){
 							for(let j=0;j < curr.size && (j + curr.y) < height;j++){
 								currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
@@ -3781,7 +3788,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "horizontal"){
 						let left = readColour();
-						let right = readColour();
+						let right;
+						if(table_ceiling === 2){
+							right = +!left
+						}
+						else{
+							right = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								currentEncode[i][j] = Math.round(left + (right - left) * (i - curr.x) /(curr.size - 1))
@@ -3790,7 +3803,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "vertical"){
 						let top = readColour();
-						let bottom = readColour();
+						let bottom;
+						if(table_ceiling === 2){
+							bottom = +!top
+						}
+						else{
+							bottom = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								currentEncode[i][j] = Math.round(top + (bottom - top) * (j - curr.y) /(curr.size - 1))
@@ -3799,7 +3818,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								currentEncode[i][j] = Math.round(colour1 + (colour2 - colour1) * ((i - curr.x) + (j - curr.y))/(2*curr.size - 2))
@@ -3808,7 +3833,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								currentEncode[i][j] = Math.round(colour1 + (colour2 - colour1) * ((curr.size - (i - curr.x) - 1) + (j - curr.y))/(2*curr.size - 2))
@@ -3817,7 +3848,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_solid_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								if(
@@ -3833,7 +3870,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_solid_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								if(
@@ -3849,7 +3892,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_half_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_diagonal_half_solid(colour1,colour2,0,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3859,7 +3908,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_half_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_diagonal_half_solid(colour1,colour2,1,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3869,7 +3924,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_half_SE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_diagonal_half_solid(colour1,colour2,2,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3879,7 +3940,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "diagonal_half_SW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_diagonal_half_solid(colour1,colour2,3,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3889,7 +3956,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "steep_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_odd_solid(colour1,colour2,false,true,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3899,7 +3972,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "calm_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_odd_solid(colour1,colour2,false,false,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3909,7 +3988,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "steep_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_odd_solid(colour1,colour2,true,true,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3919,7 +4004,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "calm_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_odd_solid(colour1,colour2,true,false,curr.size)
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3929,7 +4020,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "dip_NW"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_dip(colour1,colour2,false,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3939,7 +4036,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "dip_NE"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_dip(colour1,colour2,true,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3949,7 +4052,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "horizontal_third"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_third(colour1,colour2,false,false,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3959,7 +4068,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "horizontal_large_third"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_third(colour1,colour2,false,true,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3969,7 +4084,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "vertical_third"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_third(colour1,colour2,true,false,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3979,7 +4100,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction === "vertical_large_third"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_third(colour1,colour2,true,true,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
@@ -3989,7 +4116,13 @@ function decoder(hohData,options){
 					}
 					else if(instruction.substring(0,3) === "dct"){
 						let colour1 = readColour();
-						let colour2 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
 						let patch = create_dct(colour1,colour2,parseInt(instruction[3]),parseInt(instruction[4]),curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
