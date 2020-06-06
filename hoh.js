@@ -2532,13 +2532,17 @@ function encoder(imageData,options){
 						curr.size === 4
 						|| errorQueue[0].error === 0
 						|| table_ceiling < 10
-						|| ["whole","PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10","horizontal_large_third","horizontal_third","vertical_large_third","vertical_third"].includes(errorQueue[0].symbol)
+						|| ["whole","PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10"].includes(errorQueue[0].symbol)
 						|| !(
 							(TOPLEFT_equal && TOPRIGHT_equal)
 							|| (BOTTOMLEFT_equal && BOTTOMRIGHT_equal)
 							|| (TOPRIGHT_equal && BOTTOMRIGHT_equal)
 							|| (TOPLEFT_equal && BOTTOMLEFT_equal)
 						)
+						|| (errorQueue[0].symbol === "horizontal_large_third" && (TOPLEFT_equal && BOTTOMLEFT_equal))
+						|| (errorQueue[0].symbol === "horizontal_third" && (TOPRIGHT_equal && BOTTOMRIGHT_equal))
+						|| (errorQueue[0].symbol === "vertical_large_third" && (TOPLEFT_equal && TOPRIGHT_equal))
+						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
 					){
 						writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
 						if(table_ceiling === 2){
