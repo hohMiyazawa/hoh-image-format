@@ -2,6 +2,8 @@ const BYTE_LENGTH = 8;
 const BYTE_POWER = Math.pow(2,BYTE_LENGTH);
 const BYTE_MAX_VAL = BYTE_POWER - 1;
 
+let DEBUG_bytes = [];
+
 
 function rePlex(integer,base){
 	if(!base){
@@ -715,6 +717,28 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			return true
 		}
 
+		/*let pallette = new Array(256).fill(false);
+		let debug_maxval = 0;
+		let debug_minval = 255;
+		for(let i=0;i<width;i++){
+			for(let j=0;j<height;j++){
+				if(
+					imageData[i][j] > debug_maxval
+				){
+					debug_maxval = imageData[i][j]
+				}
+				if(
+					imageData[i][j] < debug_minval
+				){
+					debug_minval = imageData[i][j]
+				}
+				pallette[imageData[i][j]] = true
+			}
+		}
+		console.log("debug_maxval",debug_maxval);
+		console.log("debug_minval",debug_minval);
+		console.log("pallette",pallette.filter(a => a).length);*/
+
 		let currentEncode = [];
 		for(let i=0;i<width;i++){
 			currentEncode.push(new Array(height).fill(max_val))
@@ -770,6 +794,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 		}
 		let forige = 0;
 		let writeByte = function(integer){
+			DEBUG_bytes.push(integer);
 			let encodedInteger = integer - forige;
 			forige = integer;
 			if(encodedInteger < 0){
@@ -778,6 +803,16 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			aritmetic_queue.push(encodedInteger);
 			integerFrequency[encodedInteger]++
 		}
+		/*let writeByte = function(integer){
+			integer = integer - debug_minval;
+			let encodedInteger = integer - forige;
+			forige = integer;
+			if(encodedInteger < 0){
+				encodedInteger += debug_maxval + 1 - debug_minval
+			}
+			aritmetic_queue.push(encodedInteger);
+			integerFrequency[encodedInteger]++
+		}*/
 		if(monochrome){
 			writeByte = function(integer){
 				if(integer === forige){
@@ -2021,10 +2056,12 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 		},0)
 
-		console.log("clb",colourBook);
+		//console.log("clb",colourBook);
 		/*console.log("ifr",integerFrequency);
-		console.log("pre-usage",preUsage);
-		console.log("post-usage",postUsage);*/
+		console.log("pre-usage",preUsage);*/
+		console.log("???",integerFrequency);
+		console.log("post-usage",postUsage);
+		console.log("default usage",defaultUsage);
 
 		let colourBuffer = encodeHuffTable(colourHuffman);
 		/*console.log("table-size",colourBuffer.length);
@@ -2127,6 +2164,7 @@ function encodeHoh(imageData,options,CBdata,CRdata){
 			}
 			else if(isFinite(waiting)){
 				if(mode === "huffman"){
+					//DEBUG_bytes.push(waiting);
 					bitBuffer.push(...colourBook[waiting]);
 				}
 				else if(mode === "default"){

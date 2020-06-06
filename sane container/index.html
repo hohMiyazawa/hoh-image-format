@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Hoh reference encoder/decoder</title>
+		<style>
+.canvasContainer{
+	display: inline-block;
+	padding: 5px;
+	margin: 5px;
+	border: solid;
+	border-width: 1px;
+	border-radius: 3px;
+	max-width: 40%;
+}
+canvas{
+	max-width: 100%;
+	max-height: 600px;
+}
+body{
+	background: rgb(200,200,200);
+	padding: 20px;
+}
+		</style>
+	</head>
+	<body>
+		<div class="canvasContainer">
+			<h2>Original</h2>
+			<canvas id="preview" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Decoded</h2>
+			<canvas id="render" width="0" height="0"></canvas>
+		</div>
+		<hr>
+		<h3>Decode</h3>
+		<input type="file" id="hohInput"><br>
+		<hr>
+		<h3>Encode</h3>
+		<input type="file" id="imageInput"><br>
+		<h4>Parameters:</h4>
+		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="1"> 0 = lossless. Higher number = more lossy.<br>
+		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
+		Brute-force block colours: <input id="bruteForce" type="checkbox"><br>
+		Use DCT blocks: <input id="useDCT" type="checkbox"><br>
+		<button id="encodeButton">encode again</button>
+		<h4>Stats:</h4>
+		<pre id="encodeStats"></pre>
+		<script src="hoh.js"></script>
+		<script>
+let saveByteArray = (function(){
+	let a = document.createElement("a");
+	document.body.appendChild(a);
+	a.style = "display: none";
+	return function(data,name){
+		let blob = new Blob(data, {type: "octet/stream"});
+		let url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = name;
+		a.click();
+		window.URL.revokeObjectURL(url)
+	}
+}())
+
+function readFileAsArrayBuffer(file, success, error) {
+	let fr = new FileReader();
+	fr.addEventListener('error', error, false);
+	if(fr.readAsBinaryString){
+		fr.addEventListener('load', function(){
+			var string = this.resultString != null ? this.resultString : this.result;
+			var result = new Uint8Array(string.length);
+			for(var i = 0; i < string.length; i++){
+				result[i] = string.charCodeAt(i)
+			}
+			success(result.buffer)
+		}, false);
+		return fr.readAsBinaryString(file);
+	}
+	else {
+		fr.addEventListener('load', function(){
+			success(this.result)
+		}, false);
+		return fr.readAsArrayBuffer(file)
+	}
+}
+
+function drawToCanvas(imageData){
+	let canvas = document.getElementById("render");
+	if(!imageData.imageData){
+		return
+	}
+	canvas.width = imageData.width;
+	canvas.height = imageData.height;
+	let ctx = canvas.getContext("2d");
+	let image = new ImageData(new Uint8ClampedArray(imageData.imageData),imageData.width);
+	ctx.putImageData(image,0,0);
+}
+
+const inputElement = document.getElementById("hohInput");
+
+let html_decode = function(){
+	const fileList = inputElement.files;
+	readFileAsArrayBuffer(fileList[0], function(data){
+		let decodedData = decoder(new Uint8Array(data),{pixelFormat: "rgba"});
+		if(decodedData){
+			drawToCanvas(decodedData)
+		}
+	},function(e){
+		console.error(e);
+	})
+}
+inputElement.addEventListener("change",html_decode,false);
+
+
+const inputElementEncode = document.getElementById("imageInput");
+const buttonElementEncode = document.getElementById("encodeButton");
+
+let html_encode = function(){
+	if(inputElementEncode.files && inputElementEncode.files[0]){
+		let fileName = inputElementEncode.files[0].name;
+		let FR = new FileReader();
+		FR.onload = function(e){
+			let img = new Image();
+			img.addEventListener("load", function(){
+				let canvas = document.getElementById("preview");
+				canvas.height = img.height;
+				canvas.width = img.width;
+				let ctx = canvas.getContext("2d");
+				ctx.drawImage(img, 0, 0);
+				let contextData = ctx.getImageData(0,0,img.width,img.height).data;
+				let data = encoder(contextData,{
+					width: img.width,
+					height: img.height,
+					pixelFormat: "rgba",
+					maxBlockSize: 128,
+					lossySmallGradients: true,
+					forceGradients: document.getElementById("bruteForce").checked,
+					useDCT: document.getElementById("useDCT").checked,
+					optimizeChannels: true,
+					quantizer: parseFloat(document.getElementById("quantizer").value)
+				});
+				console.log("final size:",data.length);
+				saveByteArray([data], fileName + ".hoh");
+			});
+			img.src = e.target.result;
+		};       
+		FR.readAsDataURL(inputElementEncode.files[0]);
+	}
+}
+inputElementEncode.addEventListener("change",html_encode,false);
+buttonElementEncode.addEventListener("click",html_encode,false);
+		</script>
+	</body>
+</html>
