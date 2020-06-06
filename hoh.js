@@ -563,6 +563,19 @@ function ycocga_to_rgba(imageData){
 	return outBuffer
 }
 
+function bit_to_rgba(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i++){
+		if(imageData[i]){
+			outBuffer.push(255,255,255,255)
+		}
+		else{
+			outBuffer.push(0,0,0,255)
+		}
+	}
+	return outBuffer
+}
+
 
 function rgba_to_rgb(imageData){
 	let outBuffer = [];
@@ -1474,7 +1487,7 @@ function encoder(imageData,options){
 		}
 //end tables
 
-		let min_black = frequencyTable.findIndex(a => a);
+		let min_black = frequencyTable ? frequencyTable.findIndex(a => a) : 0;
 
 		function grower(num){
 			return Math.max(num - num*num/512,1)
@@ -1627,7 +1640,12 @@ function encoder(imageData,options){
 			aritmetic_queue.push(encodedInteger);
 			integerFrequency[encodedInteger]++
 		}
-
+		if(table_ceiling === 2){
+			writeByte = function(integer){
+				aritmetic_queue.push(integer);
+				integerFrequency[integer]++
+			}
+		}
 		let sharpener = function(a,b,resolver,errorFunction,symbol){
 			let patch = resolver(a,b);
 			let error = errorFunction(patch);
@@ -3188,64 +3206,69 @@ function decoder(hohData,options){
 		}
 		let translationTable = [];
 		try{
-			let flagBit1 = readBit();
-			let flagBit2 = readBit();
-			console.log(flagBit1,flagBit2);
+			if(CHANNEL_LENGTH > 1){
+				let flagBit1 = readBit();
+				let flagBit2 = readBit();
+				console.log(flagBit1,flagBit2);
 
-			if(flagBit1 === 1 && flagBit2 === 1){
-				console.log("detected range encoding");
-				while(bitBuffer.length < (CHANNEL_LENGTH - 1) && currentIndex < hohData.length){
-					bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+				if(flagBit1 === 1 && flagBit2 === 1){
+					console.log("detected range encoding");
+					while(bitBuffer.length < (CHANNEL_LENGTH - 1) && currentIndex < hohData.length){
+						bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+					}
+					let ranges = dePlex(bitBuffer.splice(0,CHANNEL_LENGTH - 1));
+					let deltas = [];
+					for(let i=0;i<ranges*2;i++){
+						deltas.push(parseInt(readDelta()) + 1)
+					};
+					let colourAllowable;
+					let rangeActive = false;
+					deltas.forEach((delta,index) => {
+						if(index === 0){
+							colourAllowable = new Array(delta - 1).fill(rangeActive)
+						}
+						else{
+							colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
+						}
+						rangeActive = !rangeActive
+					});
+					colourAllowable.forEach((val,index) => {
+						if(val){
+							translationTable.push(index)
+						}
+					})
 				}
-				let ranges = dePlex(bitBuffer.splice(0,CHANNEL_LENGTH - 1));
-				let deltas = [];
-				for(let i=0;i<ranges*2;i++){
-					deltas.push(parseInt(readDelta()) + 1)
-				};
-				let colourAllowable;
-				let rangeActive = false;
-				deltas.forEach((delta,index) => {
-					if(index === 0){
-						colourAllowable = new Array(delta - 1).fill(rangeActive)
+				else if(flagBit1 === 1 && flagBit2 === 0){
+					while(bitBuffer.length < CHANNEL_LENGTH && currentIndex < hohData.length){
+						bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
 					}
-					else{
-						colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
-					}
-					rangeActive = !rangeActive
-				});
-				colourAllowable.forEach((val,index) => {
-					if(val){
-						translationTable.push(index)
-					}
-				})
-			}
-			else if(flagBit1 === 1 && flagBit2 === 0){
-				while(bitBuffer.length < CHANNEL_LENGTH && currentIndex < hohData.length){
-					bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
+					let occupied = dePlex(bitBuffer.splice(0,CHANNEL_LENGTH));
+					let deltas = [];
+					for(let i=0;i<occupied;i++){
+						deltas.push(parseInt(readDelta()) + 1)
+					};
+					let colourAllowable = [];
+					deltas.forEach((delta,index) => {
+						colourAllowable = colourAllowable.concat(new Array(delta - 1).fill(false))
+						colourAllowable.push(true)
+					});
+					colourAllowable.forEach((val,index) => {
+						if(val){
+							translationTable.push(index)
+						}
+					})
 				}
-				let occupied = dePlex(bitBuffer.splice(0,CHANNEL_LENGTH));
-				let deltas = [];
-				for(let i=0;i<occupied;i++){
-					deltas.push(parseInt(readDelta()) + 1)
-				};
-				let colourAllowable = [];
-				deltas.forEach((delta,index) => {
-					colourAllowable = colourAllowable.concat(new Array(delta - 1).fill(false))
-					colourAllowable.push(true)
-				});
-				colourAllowable.forEach((val,index) => {
-					if(val){
-						translationTable.push(index)
+				else if(flagBit1 === 0 && flagBit2 === 0){
+					for(let i=0;i<CHANNEL_POWER;i++){
+						translationTable.push(i)
 					}
-				})
-			}
-			else if(flagBit1 === 0 && flagBit2 === 0){
-				for(let i=0;i<CHANNEL_POWER;i++){
-					translationTable.push(i)
+				}
+				else{
+					throw "here we go again"
 				}
 			}
 			else{
-				throw "here we go again"
+				translationTable = [0,1]
 			}
 		}
 		catch(e){
@@ -3341,12 +3364,27 @@ function decoder(hohData,options){
 				DEBUG_small_f.increment(symbol);
 				return smallSymbolTable[symbol]
 			}
+			if(table_ceiling === 2){
+				readSmallSymbol = function(){
+					/*let head = smallHuffman;
+					while(head.isInternal){
+						if(readBit()){
+							head = head.right
+						}
+						else{
+							head = head.left
+						}
+					}
+					return head.symbol*/
+					let symbol = dec.read(DEBUG_small_f);
+					DEBUG_small_f.increment(symbol);
+					return symbol
+				}
+			}
 
 			let forige = 0;
 
 			let oldQueue = [];
-
-			let debug_mash = []
 
 			let readColour = function(){
 				/*let head = colourHuffman;
@@ -3366,10 +3404,21 @@ function decoder(hohData,options){
 					let ele = oldQueue.shift();
 					DEBUG_integer_f.set(ele,DEBUG_integer_f.get(ele) - 1)
 				}
-				debug_mash.push(symbol);
 				let decodedInteger = (symbol + forige) % table_ceiling;
 				forige = decodedInteger
 				return decodedInteger
+			}
+			if(table_ceiling === 2){
+				readColour = function(){
+					let symbol = dec.read(DEBUG_integer_f);
+					DEBUG_integer_f.increment(symbol);
+					oldQueue.push(symbol);
+					if(oldQueue.length > 2000){
+						let ele = oldQueue.shift();
+						DEBUG_integer_f.set(ele,DEBUG_integer_f.get(ele) - 1)
+					}
+					return symbol
+				}
 			}
 
 
@@ -3933,6 +3982,10 @@ function decoder(hohData,options){
 						previous2x2_curr.shift()
 					}
 					let instruction = readSmallSymbol();
+					if(table_ceiling === 2){
+						write2x2(curr,...rePlex(instruction,4))
+						continue
+					}
 					if(instruction === "PREVIOUS"){
 						let chunck_previous = get_chunck(previous2x2_curr[previous2x2_curr.length - 2].x,previous2x2_curr[previous2x2_curr.length - 2].y,2);
 						write2x2(curr,chunck_previous[0][0],chunck_previous[1][0],chunck_previous[1][1],chunck_previous[0][1])
@@ -4153,6 +4206,14 @@ function decoder(hohData,options){
 		let rawData = multiplexChannels(channels);
 		return {
 			imageData: ycocga_to_rgba(rawData),
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "bit"){
+		let rawData = multiplexChannels([decodeChannel({bitDepth: 1})]);
+		return {
+			imageData: bit_to_rgba(rawData),
 			width: width,
 			height: height
 		}
