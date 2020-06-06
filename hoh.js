@@ -2520,32 +2520,47 @@ function encoder(imageData,options){
 					))
 				}
 
+				let TOPLEFT_equal = mArr[0] === mArr[1] && mArr[0] === mArr[4] && mArr[0] === mArr[5];
+				let TOPRIGHT_equal = mArr[2] === mArr[3] && mArr[2] === mArr[6] && mArr[2] === mArr[7];
+				let BOTTOMLEFT_equal = mArr[8] === mArr[9] && mArr[8] === mArr[12] && mArr[8] === mArr[13];
+				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];
+
 
 				errorQueue.sort((a,b) => a.error - b.error);
 				if(errorQueue[0].error <= localQuantizer){
-					writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-					errorQueue[0].colours.forEach(colour => {
-						writeByte(colour);
-					});
-					for(let i=0;i < curr.size && (i + curr.x) < width;i++){
-						for(let j=0;j < curr.size && (j + curr.y) < height;j++){
-							currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
+					if(
+						curr.size === 4
+						|| errorQueue[0].error === 0
+						|| table_ceiling < 10
+						|| ["whole","PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10","horizontal_large_third","horizontal_third","vertical_large_third","vertical_third"].includes(errorQueue[0].symbol)
+						|| !(
+							(TOPLEFT_equal && TOPRIGHT_equal)
+							|| (BOTTOMLEFT_equal && BOTTOMRIGHT_equal)
+							|| (TOPRIGHT_equal && BOTTOMRIGHT_equal)
+							|| (TOPLEFT_equal && BOTTOMLEFT_equal)
+						)
+					){
+						writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
+						errorQueue[0].colours.forEach(colour => {
+							writeByte(colour);
+						});
+						for(let i=0;i < curr.size && (i + curr.x) < width;i++){
+							for(let j=0;j < curr.size && (j + curr.y) < height;j++){
+								currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
+							}
 						}
+						previous2x2_curr.push({
+							x: curr.x + 2,
+							y: curr.y + curr.size - 2,
+							size: 2
+						})
+						previous2x2_curr.push({
+							x: curr.x,
+							y: curr.y + curr.size - 2,
+							size: 2
+						});
+						continue
 					}
-					previous2x2_curr.push({
-						x: curr.x + 2,
-						y: curr.y + curr.size - 2,
-						size: 2
-					})
-					previous2x2_curr.push({
-						x: curr.x,
-						y: curr.y + curr.size - 2,
-						size: 2
-					});
-					/*if(compare_pre(curr,blockQueue[blockQueue.length - 1]) && errorQueue[0].error > 0 && !["PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10"].includes(errorQueue[0].symbol)){
-						console.log("pre",errorQueue[0].symbol,errorQueue[0].error,localQuantizer)
-					}*/
-					continue
 				}
 				writeLargeSymbol("divide",curr.size === 4);
 				blockQueue.push({
