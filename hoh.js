@@ -3132,7 +3132,7 @@ function decoder(hohData,options){
 				bitBuffer = bitBuffer.concat(rePlex(hohData[currentIndex++]))
 			}
 			else{
-				return -1
+				throw "unexpeced end of file"
 			}
 		}
 		return bitBuffer.splice(0,1)[0]
@@ -3198,11 +3198,14 @@ function decoder(hohData,options){
 			return head.symbol
 		}
 
+		if(!options.fallBack){
+			options.fallback = 0
+		}
+
 		let imageData = [];
 		let currentEncode = [];
 		for(let i=0;i<width;i++){
-			imageData.push(new Array(height).fill(0));
-			currentEncode.push(new Array(height).fill(0))
+			imageData.push(new Array(height).fill(options.fallBack))
 		}
 		let translationTable = [];
 		try{
@@ -3280,6 +3283,9 @@ function decoder(hohData,options){
 		try{
 			let table_ceiling = translationTable.length;
 			console.log("d table ceiling",table_ceiling);
+			for(let i=0;i<width;i++){
+				currentEncode.push(new Array(height).fill(0))
+			}
 
 			function get_chunck(x,y,size){
 				let data = [];
@@ -3461,6 +3467,7 @@ function decoder(hohData,options){
 
 			let debug_passed = false;
 
+		try{
 			while(blockQueue.length){
 				let curr = blockQueue.pop();
 				if(
@@ -4047,6 +4054,22 @@ function decoder(hohData,options){
 			}
 		}
 		catch(e){
+			console.log("INTER");
+			let translatedFallback = translationTable.findIndex(a => a === options.fallback);
+			if(translatedFallback === -1){
+				translatedFallback = Math.floor(translationTable.length/2)
+			}
+			blockQueue.forEach(curr => {
+				for(let i=curr.x;i<(curr.x + curr.size) && i < width;i++){
+					for(let j=curr.y;j<(curr.y + curr.size) && j < height;j++){
+						currentEncode[i][j] = translatedFallback
+					}
+				}
+			})
+			throw "Incomplete data"
+		}
+		}
+		catch(e){
 			console.log(e);
 			for(let i=0;i<width;i++){
 				for(let j=0;j<height;j++){
@@ -4082,7 +4105,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 9}))
+			channels.push(decodeChannel({bitDepth: 9, fallback: 256}))
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4092,7 +4115,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 9}))
+			channels.push(decodeChannel({bitDepth: 9, fallback: 256}))
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -4122,7 +4145,7 @@ function decoder(hohData,options){
 			channels[1] = fill256
 		}
 		else{
-			channels[1] = decodeChannel({bitDepth: 9})
+			channels[1] = decodeChannel({bitDepth: 9, fallback: 256})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4132,7 +4155,7 @@ function decoder(hohData,options){
 			channels[2] = fill256
 		}
 		else{
-			channels[2] = decodeChannel({bitDepth: 9})
+			channels[2] = decodeChannel({bitDepth: 9, fallback: 256})
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -4151,7 +4174,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 8}))
+			channels.push(decodeChannel({bitDepth: 8, fallback: 128}))
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4161,7 +4184,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 8}))
+			channels.push(decodeChannel({bitDepth: 8, fallback: 128}))
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -4191,7 +4214,7 @@ function decoder(hohData,options){
 			channels[1] = fill256
 		}
 		else{
-			channels[1] = decodeChannel({bitDepth: 8})
+			channels[1] = decodeChannel({bitDepth: 8, fallback: 128})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4201,7 +4224,7 @@ function decoder(hohData,options){
 			channels[2] = fill256
 		}
 		else{
-			channels[2] = decodeChannel({bitDepth: 8})
+			channels[2] = decodeChannel({bitDepth: 8, fallback: 128})
 		}
 		let rawData = multiplexChannels(channels);
 		return {
