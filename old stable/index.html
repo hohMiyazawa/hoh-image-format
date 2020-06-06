@@ -24,6 +24,7 @@ body{
 		</style>
 	</head>
 	<body>
+		<a href="progressive/index.html">The new version, with progressive encoding (but no lossy encoding implemented yet)</a><br>
 		<div class="canvasContainer">
 			<h2>Original</h2>
 			<canvas id="preview" width="0" height="0"></canvas>
@@ -39,7 +40,8 @@ body{
 		<h3>Encode</h3>
 		<input type="file" id="imageInput"><br>
 		<h4>Parameters:</h4>
-		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="1"> 0 = lossless. Higher number = more lossy.<br>
+		Quantizer: <input id="quantizer" value="0" type="number" min="0" step="0.001"> 0 = lossless. Higher number = more lossy. Useful values &lt; 0.2<br>
+		Colour Quantizer: <input id="colourQuantizer" value="0" type="number" min="0" step="0.001"> The eye is less sensitive to colour, so make this number higher<br>
 		Max block size: <input id="maxBlockSize" value="64" type="number" min="0" step="1"> 0 = no limit. Large blocks are mostly useless, so setting a limit improves encoding speed greatly<br>
 		Brute-force block colours: <input id="bruteForce" type="checkbox"><br>
 		Use DCT blocks: <input id="useDCT" type="checkbox"><br>
@@ -48,6 +50,8 @@ body{
 		<pre id="encodeStats"></pre>
 		<script src="hoh.js"></script>
 		<script>
+
+
 let saveByteArray = (function(){
 	let a = document.createElement("a");
 	document.body.appendChild(a);
@@ -86,14 +90,49 @@ function readFileAsArrayBuffer(file, success, error) {
 
 function drawToCanvas(imageData){
 	let canvas = document.getElementById("render");
-	if(!imageData.imageData){
-		return
-	}
-	canvas.width = imageData.width;
-	canvas.height = imageData.height;
+	canvas.width = imageData.luma.length;
+	canvas.height = imageData.luma[0].length || 0;
 	let ctx = canvas.getContext("2d");
-	let image = new ImageData(new Uint8ClampedArray(imageData.imageData),imageData.width);
-	ctx.putImageData(image,0,0);
+	if(imageData.Cb.length === 0){
+		imageData.luma.forEach((row,i) => {
+			row.forEach((cel,j) => {
+				ctx.fillStyle = "rgb(" + cel + "," + cel + "," + cel +")";
+				ctx.fillRect(i,j,1,1)
+			})
+		})
+	}
+	else{
+		let showFlat = [];
+		for(let i=0;i<imageData.luma[0].length;i++){
+			for(let j=0;j<imageData.luma.length;j++){
+				showFlat.push(
+					Math.round(imageData.luma[j][i] + imageData.Cb[j][i] - imageData.Cr[j][i]),
+					Math.round(imageData.luma[j][i] + imageData.Cr[j][i] - 128),
+					Math.round(imageData.luma[j][i] - imageData.Cb[j][i] - imageData.Cr[j][i] + 256),
+					255
+				)
+			}
+		}
+		let image = new ImageData(new Uint8ClampedArray(showFlat),imageData.luma.length);
+		ctx.putImageData(image,0,0);
+	}
+}
+
+function hohStatsHandler(data){
+	document.getElementById("encodeStats").innerText = `
+compression: ${Math.round((1 - (data.size / (data.width * data.height * 3)))*10000)/100 + "%"}
+time: ${data.time + "ms"}
+
+huffman tables: ${data.huffman_tables} bytes
+
+size: ${data.size} bytes
+- header: 8 bytes
+- luma: ${data.luma} bytes
+- chroma: ${Math.max(data.chroma,0)} bytes
+
+luma macroblocks: ${Object.keys(data.blockUsage[0].large).reduce((acc,val) => acc + data.blockUsage[0].large[val],0)}
+${Object.keys(data.blockUsage[0].large).map(val => "- " + val + ": " + data.blockUsage[0].large[val]).join("\n")}
+`
 }
 
 const inputElement = document.getElementById("hohInput");
@@ -101,7 +140,7 @@ const inputElement = document.getElementById("hohInput");
 let html_decode = function(){
 	const fileList = inputElement.files;
 	readFileAsArrayBuffer(fileList[0], function(data){
-		let decodedData = decoder(new Uint8Array(data),{pixelFormat: "rgba"});
+		let decodedData = decodeHoh(new Uint8Array(data));
 		if(decodedData){
 			drawToCanvas(decodedData)
 		}
@@ -110,7 +149,6 @@ let html_decode = function(){
 	})
 }
 inputElement.addEventListener("change",html_decode,false);
-
 
 const inputElementEncode = document.getElementById("imageInput");
 const buttonElementEncode = document.getElementById("encodeButton");
@@ -128,19 +166,53 @@ let html_encode = function(){
 				let ctx = canvas.getContext("2d");
 				ctx.drawImage(img, 0, 0);
 				let contextData = ctx.getImageData(0,0,img.width,img.height).data;
-				let data = encoder(contextData,{
-					width: img.width,
-					height: img.height,
-					pixelFormat: "rgba",
-					maxBlockSize: 128,
-					lossySmallGradients: true,
+				let imageData = [];
+				for(let i=0;i<img.width;i++){
+					let col = [];
+					for(let j=0;j<img.height;j++){
+						col.push(Math.round(
+							contextData[i * 4 + j * img.width * 4]/4
+							+ contextData[i * 4 + j * img.width * 4 + 1]/2
+							+ contextData[i * 4 + j * img.width * 4 + 2]/4
+						))
+					};
+					imageData.push(col)
+				}
+				let CBdata = [];
+				for(let i=0;i<img.width;i++){
+					let col = [];
+					for(let j=0;j<img.height;j++){
+						col.push(Math.round(
+							127.5
+							+ contextData[i * 4 + j * img.width * 4]/2
+							- contextData[i * 4 + j * img.width * 4 + 2]/2
+						))
+					};
+					CBdata.push(col)
+				}
+				let CRdata = [];
+				for(let i=0;i<img.width;i++){
+					let col = [];
+					for(let j=0;j<img.height;j++){
+						col.push(Math.round(
+							127.5
+							- contextData[i * 4 + j * img.width * 4]/4
+							+ contextData[i * 4 + j * img.width * 4 + 1]/2
+							- contextData[i * 4 + j * img.width * 4 + 2]/4
+						))
+					};
+					CRdata.push(col)
+				}
+				saveByteArray([encodeHoh(imageData,{
+					quantizer: (parseFloat(document.getElementById("quantizer").value) || 0)/10,
 					forceGradients: document.getElementById("bruteForce").checked,
+					lossySmallGradients: true,
+					forceGradientsExtra: true,
 					useDCT: document.getElementById("useDCT").checked,
-					optimizeChannels: true,
-					quantizer: parseFloat(document.getElementById("quantizer").value)
-				});
-				console.log("final size:",data.length);
-				saveByteArray([data], fileName + ".hoh");
+					subSampling: (parseFloat(document.getElementById("colourQuantizer").value) || 0)/10,
+					maxBlockSize: parseInt(document.getElementById("maxBlockSize").value) || 0,
+					edgeWeight: 2.5,
+				},CBdata,CRdata)], fileName + ".hoh");
 			});
 			img.src = e.target.result;
 		};       
@@ -149,6 +221,7 @@ let html_encode = function(){
 }
 inputElementEncode.addEventListener("change",html_encode,false);
 buttonElementEncode.addEventListener("click",html_encode,false);
+
 		</script>
 	</body>
 </html>
