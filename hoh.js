@@ -644,11 +644,33 @@ function check_index(imageData){
 				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
 			)
 		}
-		if(list.length > 16){
+		if(list.length > 256){
 			return null
 		}
 	}
 	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114)
+}
+
+function check_indexa(imageData,full){
+	let list = [];
+	for(let i=0;i<imageData.length/20;i += 4){
+		if(
+			!list.find(
+				ele => (ele[0] === imageData[i + 0]
+					&& ele[1] === imageData[i + 1]
+					&& ele[2] === imageData[i + 2]
+					&& ele[3] === imageData[i + 3]) || (full && ele[3] === 0 && imageData[i + 3] === 0)
+			)
+		){
+			list.push(
+				[imageData[i + 0],imageData[i + 1],imageData[i + 2],imageData[i + 3]]
+			)
+		}
+		if(list.length > 256){
+			return null
+		}
+	}
+	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 + a[3] - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114 - b[3])
 }
 
 function rgb_to_indexed(imageData,index){
@@ -658,6 +680,19 @@ function rgb_to_indexed(imageData,index){
 			ele => ele[0] === imageData[i + 0]
 				&& ele[1] === imageData[i + 1]
 				&& ele[2] === imageData[i + 2]
+		))
+	}
+	return outBuffer
+}
+
+function rgba_to_indexeda(imageData,index,full){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 4){
+		outBuffer.push(index.findIndex(
+			ele => (ele[0] === imageData[i + 0]
+				&& ele[1] === imageData[i + 1]
+				&& ele[2] === imageData[i + 2]
+				&& ele[3] === imageData[i + 3]) || (full && ele[3] === 0 && imageData[i + 3] === 0)
 		))
 	}
 	return outBuffer
@@ -1291,7 +1326,7 @@ const largeSymbolTable = [
 ]
 
 const internal_formats = [
-	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga","indexed"
+	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga","indexed","indexeda"
 ]
 
 function encoder(imageData,options){
@@ -1339,6 +1374,14 @@ function encoder(imageData,options){
 				}
 				else if(options.target_pixelFormat === "ycocga"){
 					options.target_pixelFormat = "ycocg"
+				}
+			}
+			else{
+				c_index = check_indexa(imageData,options.fullTransparancyOptimization);
+				if(c_index){
+					imageData = rgba_to_indexeda(imageData,c_index,options.fullTransparancyOptimization);
+					options.target_pixelFormat = "indexeda"
+					console.log("c_index",c_index);
 				}
 			}
 		}
@@ -1445,11 +1488,20 @@ function encoder(imageData,options){
 		}
 
 		if(c_options.indexed){
-			writeByteNative(c_options.c_index.length);
+			writeByteNative(c_options.c_index.length - 1);
 			c_options.c_index.forEach(colour => {
 				writeByteNative(colour[0]);
 				writeByteNative(colour[1]);
 				writeByteNative(colour[2]);
+			})
+		}
+		else if(c_options.indexeda){
+			writeByteNative(c_options.c_index.length - 1);
+			c_options.c_index.forEach(colour => {
+				writeByteNative(colour[0]);
+				writeByteNative(colour[1]);
+				writeByteNative(colour[2]);
+				writeByteNative(colour[3]);
 			})
 		}
 
@@ -3158,6 +3210,15 @@ function encoder(imageData,options){
 			c_index: c_index
 		})
 	}
+	else if(options.target_pixelFormat === "indexeda"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "indexeda",
+			quantizer: options.quantizer,
+			indexeda: true,
+			c_index: c_index
+		})
+	}
 
 
 	if(bitBuffer.length){
@@ -3266,9 +3327,15 @@ function decoder(hohData,options){
 
 		let c_index = [];
 		if(options.indexed){
-			let indexNumber = readByteNative();
+			let indexNumber = readByteNative() + 1;
 			for(let i=0;i<indexNumber;i++){
 				c_index.push([readByteNative(),readByteNative(),readByteNative()])
+			}
+		}
+		else if(options.indexeda){
+			let indexNumber = readByteNative() + 1;
+			for(let i=0;i<indexNumber;i++){
+				c_index.push([readByteNative(),readByteNative(),readByteNative(),readByteNative()])
 			}
 		}
 
@@ -4289,7 +4356,7 @@ function decoder(hohData,options){
 		}
 		catch(e){
 			console.log(e);
-			if(options.indexed){
+			if(options.indexed || options.indexeda){
 				let outBuffer = [];
 				for(let j=0;j<height;j++){
 					for(let i=0;i<width;i++){
@@ -4307,7 +4374,7 @@ function decoder(hohData,options){
 			botchedFlag = true;
 			return imageData
 		}
-		if(options.indexed){
+		if(options.indexed || options.indexeda){
 			let outBuffer = [];
 			for(let j=0;j<height;j++){
 				for(let i=0;i<width;i++){
@@ -4482,6 +4549,14 @@ function decoder(hohData,options){
 		let rawData = decodeChannel({bitDepth: 8,indexed: true});
 		return {
 			imageData: rgb_to_rgba(rawData),
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "indexeda"){
+		let rawData = decodeChannel({bitDepth: 8,indexeda: true});
+		return {
+			imageData: rawData,
 			width: width,
 			height: height
 		}
