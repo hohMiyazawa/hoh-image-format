@@ -1789,6 +1789,8 @@ function encoder(imageData,options){
 				|| (
 					options.quantizer === 0
 					&& curr.size > 2
+					&& (curr.x + 1) < width
+					&& (curr.y + 1) < height
 					&& channelData[curr.x][curr.y] !== channelData[curr.x + 1][curr.y]
 					&& channelData[curr.x][curr.y] !== channelData[curr.x][curr.y + 1]
 					&& channelData[curr.x][curr.y + 1] !== channelData[curr.x + 1][curr.y]
