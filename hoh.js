@@ -630,6 +630,39 @@ function check_tripplets(imageData){
 	return true
 }
 
+function check_index(imageData){
+	let list = [];
+	for(let i=0;i<imageData.length;i += 3){
+		if(
+			!list.find(
+				ele => ele[0] === imageData[i + 0]
+					&& ele[1] === imageData[i + 1]
+					&& ele[2] === imageData[i + 2]
+			)
+		){
+			list.push(
+				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
+			)
+		}
+		if(list.lenth > 16){
+			return null
+		}
+	}
+	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114)
+}
+
+function rgb_to_indexed(imageData,index){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		outBuffer.push(index.findIndex(
+			ele => ele[0] === imageData[i + 0]
+				&& ele[1] === imageData[i + 1]
+				&& ele[2] === imageData[i + 2]
+		))
+	}
+	return outBuffer
+}
+
 function greyscale_to_bitmap(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i++){
@@ -1258,7 +1291,7 @@ const largeSymbolTable = [
 ]
 
 const internal_formats = [
-	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga"
+	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga","indexed"
 ]
 
 function encoder(imageData,options){
@@ -1294,6 +1327,7 @@ function encoder(imageData,options){
 			options.target_pixelFormat = options.pixelFormat
 		}
 	}
+	let c_index;
 	if(options.optimizeChannels){
 		if(options.pixelFormat === "rgba"){
 			if(check_rgba_alpha(imageData)){
@@ -1314,6 +1348,14 @@ function encoder(imageData,options){
 				imageData = rgb_to_greyscale(imageData);
 				options.pixelFormat = "greyscale";
 				options.target_pixelFormat = "greyscale"
+			}
+			else{
+				c_index = check_index(imageData);
+				if(c_index){
+					imageData = rgb_to_indexed(imageData,c_index);
+					options.target_pixelFormat = "indexed"
+					console.log("c_index",c_index);
+				}
 			}
 		}
 		if(options.pixelFormat === "greyscale"){
@@ -1347,7 +1389,6 @@ function encoder(imageData,options){
 
 //write header
 	writeByteNative(72);writeByteNative(79);writeByteNative(72);
-	writeByteNative(0);
 	bitBuffer.push(...encodeVarint(width,BYTE_LENGTH));
 	bitBuffer.push(...encodeVarint(height,BYTE_LENGTH));
 	writeByteNative(internal_formats.indexOf(options.target_pixelFormat));
@@ -1403,6 +1444,15 @@ function encoder(imageData,options){
 			c_options.quantizer = options.quantizer
 		}
 
+		if(c_options.indexed){
+			writeByteNative(c_options.c_index.length);
+			c_options.c_index.forEach(colour => {
+				writeByteNative(colour[0]);
+				writeByteNative(colour[1]);
+				writeByteNative(colour[2]);
+			})
+		}
+
 		let aritmetic_queue = [];
 
 		let table_ceiling = CHANNEL_POWER;
@@ -1420,7 +1470,6 @@ function encoder(imageData,options){
 			};
 			occupied = frequencyTable.filter(a => a).length;
 			console.log(c_options.name,Math.round(100*occupied/frequencyTable.length) + "%",frequencyTable);
-			console.log(c_options.name,"raw table size",CHANNEL_POWER);
 			delta_data = rePlex(occupied,CHANNEL_LENGTH);
 			let delta = 0;
 
@@ -1433,13 +1482,12 @@ function encoder(imageData,options){
 					delta = 0
 				}
 			}
-			console.log(c_options.name,"delta table size",delta_data.length,delta_data);
+			console.log(c_options.name,"delta table size",delta_data.length);
 		
 			range_data = [];
 			let rangeActive = false;
 			delta = 0;
 			let shift_counter = 0;
-			let nums = [];
 			for(let i=0;i<CHANNEL_POWER;i++){
 				delta++;
 				if(
@@ -1448,7 +1496,6 @@ function encoder(imageData,options){
 				){
 					rangeActive = !rangeActive;
 					shift_counter++;
-					nums.push(delta);
 					range_data = range_data.concat(PRIMITIVE[delta - 1]);
 					delta = 0;
 
@@ -1458,11 +1505,9 @@ function encoder(imageData,options){
 					&& rangeActive
 				){
 					range_data = range_data.concat(PRIMITIVE[delta]);
-					shift_counter++;
-					nums.push(delta)
+					shift_counter++
 				}
 			}
-			//console.log("nums",nums);
 			range_data = rePlex(shift_counter/2,CHANNEL_LENGTH - 1).concat(range_data);
 			console.log(c_options.name,"range delta table size",range_data.length);
 
@@ -1584,7 +1629,7 @@ function encoder(imageData,options){
 				}
 				data.push(col)
 			}
-			if(data.flat().filter(a => isNaN(a)).length){
+			/*if(data.flat().filter(a => isNaN(a)).length){
 				console.log("data",data);
 				for(let i=0;i<data.length;i++){
 					for(let j=0;j<data.length;j++){
@@ -1595,7 +1640,7 @@ function encoder(imageData,options){
 					}
 				}
 				throw "data"
-			}
+			}*/
 			return data
 		}
 
@@ -3102,6 +3147,15 @@ function encoder(imageData,options){
 			quantizer: 0
 		})
 	}
+	else if(options.target_pixelFormat === "indexed"){
+		encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "indexed",
+			quantizer: options.quantizer,
+			indexed: true,
+			c_index: c_index
+		})
+	}
 
 
 	if(bitBuffer.length){
@@ -3134,7 +3188,7 @@ function decoder(hohData,options){
 			error: "only rgba or yiq26a supported for pixelFormat"
 		}
 	}
-	if(hohData.length < 8){
+	if(hohData.length < 7){
 		return{
 			imageData: null,
 			error: "data does not contain required header"
@@ -3162,7 +3216,7 @@ function decoder(hohData,options){
 		}
 		return bitBuffer.splice(0,1)[0]
 	}
-	if(!(readByteNative() === 72 && readByteNative() === 79 && readByteNative() === 72 && readByteNative() === 0)){
+	if(!(readByteNative() === 72 && readByteNative() === 79 && readByteNative() === 72)){
 		return{
 			imageData: null,
 			error: "not a hoh image. Signature does not match"
@@ -3207,6 +3261,14 @@ function decoder(hohData,options){
 		const CHANNEL_LENGTH = options.bitDepth;
 		const CHANNEL_POWER = Math.pow(2,CHANNEL_LENGTH);
 		const CHANNEL_MAX_VAL = CHANNEL_POWER - 1;
+
+		let c_index = [];
+		if(options.indexed){
+			let indexNumber = readByteNative();
+			for(let i=0;i<indexNumber;i++){
+				c_index.push([readByteNative(),readByteNative(),readByteNative()])
+			}
+		}
 
 		const PRIMITIVE = primitive_huffman(CHANNEL_POWER);
 
@@ -3350,7 +3412,6 @@ function decoder(hohData,options){
 			let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
 
 			let max_reads = readVarint(BYTE_LENGTH);
-			console.log(max_reads)
 
 			let debug_reads = 0;
 			let testreader = {
@@ -4226,6 +4287,16 @@ function decoder(hohData,options){
 		}
 		catch(e){
 			console.log(e);
+			if(options.indexed){
+				let outBuffer = [];
+				for(let j=0;j<height;j++){
+					for(let i=0;i<width;i++){
+						outBuffer.push(...c_index[currentEncode[i][j]])
+					}
+				}
+				botchedFlag = true;
+				return outBuffer
+			}
 			for(let i=0;i<width;i++){
 				for(let j=0;j<height;j++){
 					imageData[i][j] = translationTable[currentEncode[i][j]]
@@ -4233,6 +4304,15 @@ function decoder(hohData,options){
 			}
 			botchedFlag = true;
 			return imageData
+		}
+		if(options.indexed){
+			let outBuffer = [];
+			for(let j=0;j<height;j++){
+				for(let i=0;i<width;i++){
+					outBuffer.push(...c_index[currentEncode[i][j]])
+				}
+			}
+			return outBuffer
 		}
 		for(let i=0;i<width;i++){
 			for(let j=0;j<height;j++){
@@ -4392,6 +4472,14 @@ function decoder(hohData,options){
 		let rawData = multiplexChannels([decodeChannel({bitDepth: 1})]);
 		return {
 			imageData: bit_to_rgba(rawData),
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "indexed"){
+		let rawData = decodeChannel({bitDepth: 8,indexed: true});
+		return {
+			imageData: rgb_to_rgba(rawData),
 			width: width,
 			height: height
 		}
