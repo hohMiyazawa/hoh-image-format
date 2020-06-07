@@ -1822,7 +1822,7 @@ function encoder(imageData,options){
 					let patch = resolver(0,1);
 					let patch2 = resolver(1,0);
 					let error = errorFunction(patch);
-					let error2 = errorFunction(patch);
+					let error2 = errorFunction(patch2);
 					if(error < error2){
 						return {
 							symbol: symbol,
