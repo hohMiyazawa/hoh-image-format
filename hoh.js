@@ -644,7 +644,7 @@ function check_index(imageData){
 				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
 			)
 		}
-		if(list.lenth > 16){
+		if(list.length > 16){
 			return null
 		}
 	}
