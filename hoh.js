@@ -1784,17 +1784,21 @@ function encoder(imageData,options){
 					new_a = Math.max(a - 1,0);
 					diff = -1
 				}
-				let new_error = errorFunction(resolver(new_a,b));
+				let new_patch = resolver(new_a,b);
+				let new_error = errorFunction(new_patch);
 				while(new_error < error){
 					a = new_a;
+					patch = new_patch;
 					error = new_error;
 					new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
 					new_error = errorFunction(resolver(new_a,b))
 				}
 				let new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
-				new_error = errorFunction(resolver(a,new_b));
+				new_patch = resolver(a,new_b);
+				new_error = errorFunction(new_patch);
 				while(new_error < error){
 					b = new_b;
+					patch = new_patch;
 					error = new_error;
 					new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
 					new_error = errorFunction(resolver(a,new_b))
@@ -1803,10 +1807,11 @@ function encoder(imageData,options){
 			return {
 				symbol: symbol,
 				error: error,
-				patch: resolver(a,b),
+				patch: patch,
 				colours: [a,b]
 			}
 		}
+		let asample_dct = sample_dct;
 		if(table_ceiling === 2){
 			writeByte = function(integer){
 				aritmetic_queue.push(integer);
@@ -1835,6 +1840,9 @@ function encoder(imageData,options){
 						}
 					}
 				}
+				asample_dct = function(){
+					return [0,1]
+				}
 			}
 			else{
 				sharpener = function(a,b,resolver,errorFunction,symbol){
@@ -1851,6 +1859,17 @@ function encoder(imageData,options){
 					}
 				}
 			}
+			/*error_compare = function(chunck1,chunck2,offx,offy){
+				let sumError = 0;
+				for(let i=0;i<chunck1.length;i++){
+					for(let j=0;j<chunck1[i].length;j++){
+						if(offx + i < width && offy + j < height){
+							sumError += Math.abs(chunck2[i][j] - chunck1[i][j])
+						}
+					}
+				}
+				return sumError/(chunck1.length * chunck1[0].length)
+			}*/
 		}
 
 		let previous2x2_curr = [];
@@ -2569,13 +2588,13 @@ function encoder(imageData,options){
 							"dct10"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,0,3),
+							...asample_dct(chunck,0,3),
 							(a,b) => create_dct(a,b,0,3,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct03"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,0),
+							...asample_dct(chunck,3,0),
 							(a,b) => create_dct(a,b,3,0,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct30"
@@ -2596,13 +2615,13 @@ function encoder(imageData,options){
 							"dct20"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,2,3),
+							...asample_dct(chunck,2,3),
 							(a,b) => create_dct(a,b,2,3,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct23"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,2),
+							...asample_dct(chunck,3,2),
 							(a,b) => create_dct(a,b,3,2,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct32"
@@ -2616,13 +2635,13 @@ function encoder(imageData,options){
 							"dct11"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,2,2),
+							...asample_dct(chunck,2,2),
 							(a,b) => create_dct(a,b,2,2,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct22"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,3),
+							...asample_dct(chunck,3,3),
 							(a,b) => create_dct(a,b,3,3,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct33"
@@ -2635,7 +2654,7 @@ function encoder(imageData,options){
 							"dct12"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,1,3),
+							...asample_dct(chunck,1,3),
 							(a,b) => create_dct(a,b,1,3,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct13"
@@ -2648,7 +2667,7 @@ function encoder(imageData,options){
 							"dct21"
 						))
 						errorQueue.push(sharpener(
-							...sample_dct(chunck,3,1),
+							...asample_dct(chunck,3,1),
 							(a,b) => create_dct(a,b,3,1,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct31"
