@@ -966,6 +966,40 @@ function create_vertical_gradient(colour1,colour2,size){
 	return data
 }
 
+function create_vertical_dummy(colour1,colour2,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(j < size/2){
+				col.push(colour1)
+			}
+			else{
+				col.push(colour2)
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
+function create_horizontal_dummy(colour1,colour2,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(i < size/2){
+				col.push(colour1)
+			}
+			else{
+				col.push(colour2)
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 function create_horizontal_gradient(colour1,colour2,size){
 	let data = []
 	for(let i=0;i<size;i++){
@@ -1332,6 +1366,7 @@ const internal_formats = [
 ]
 
 function encoder(imageData,options){
+	let t0 = performance.now()
 	console.info("ENCODING");
 	const width = options.width;
 	const height = options.height;
@@ -1739,12 +1774,6 @@ function encoder(imageData,options){
 			aritmetic_queue.push(encodedInteger);
 			integerFrequency[encodedInteger]++
 		}
-		if(table_ceiling === 2){
-			writeByte = function(integer){
-				aritmetic_queue.push(integer);
-				integerFrequency[integer]++
-			}
-		}
 		let sharpener = function(a,b,resolver,errorFunction,symbol){
 			let patch = resolver(a,b);
 			let error = errorFunction(patch);
@@ -1776,6 +1805,51 @@ function encoder(imageData,options){
 				error: error,
 				patch: resolver(a,b),
 				colours: [a,b]
+			}
+		}
+		if(table_ceiling === 2){
+			writeByte = function(integer){
+				aritmetic_queue.push(integer);
+				integerFrequency[integer]++
+			}
+			if(options.forceGradients){
+				sharpener = function(a,b,resolver,errorFunction,symbol){
+					let patch = resolver(0,1);
+					let patch2 = resolver(1,0);
+					let error = errorFunction(patch);
+					let error2 = errorFunction(patch);
+					if(error < error2){
+						return {
+							symbol: symbol,
+							error: error,
+							patch: patch,
+							colours: [0,1]
+						}
+					}
+					else{
+						return {
+							symbol: symbol,
+							error: error2,
+							patch: patch2,
+							colours: [1,0]
+						}
+					}
+				}
+			}
+			else{
+				sharpener = function(a,b,resolver,errorFunction,symbol){
+					if(a === b){
+						b === +!a
+					}
+					let patch = resolver(a,b);
+					let error = errorFunction(patch);
+					return {
+						symbol: symbol,
+						error: error,
+						patch: patch,
+						colours: [a,b]
+					}
+				}
 			}
 		}
 
@@ -2307,28 +2381,31 @@ function encoder(imageData,options){
 				}
 
 
-
+				let top_third_large;
+				let bottom_third_large;
+				let left_third_large;
+				let right_third_large;
 				if(options.quantizer > 0){
-					let left_third_large = Math.round((
+					left_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[9] + mArr[12] + mArr[13]
 						+ mArr[2]/2 + mArr[6]/2 + mArr[10]/2 + mArr[14]/2
 					)/10);
 					let right_third_small = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
 
 					let left_third_small = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
-					let right_third_large = Math.round((
+					right_third_large = Math.round((
 						mArr[3] + mArr[7] + mArr[11] + mArr[15] + mArr[2] + mArr[6] + mArr[10] + mArr[14]
 						+ mArr[1]/2 + mArr[5]/2 + mArr[9]/2 + mArr[13]/2
 					)/10);
 
-					let top_third_large = Math.round((
+					top_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[2] + mArr[3] + mArr[4] + mArr[5] + mArr[6] + mArr[7]
 						 + mArr[8]/2 + mArr[9]/2 + mArr[10]/2 + mArr[11]/2
 					)/10);
 					let bottom_third_small = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
 
 					let top_third_small = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
-					let bottom_third_large = Math.round((
+					bottom_third_large = Math.round((
 						mArr[8] + mArr[9] + mArr[10] + mArr[11] + mArr[12] + mArr[13] + mArr[14] + mArr[15]
 						 + mArr[4]/2 + mArr[5]/2 + mArr[6]/2 + mArr[7]/2
 					)/10);
@@ -2645,33 +2722,56 @@ function encoder(imageData,options){
 						|| (errorQueue[0].symbol === "vertical_large_third" && (TOPLEFT_equal && TOPRIGHT_equal))
 						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
 					){
-						writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-						if(table_ceiling === 2){
-							if(errorQueue[0].colours.length){
-								writeByte(errorQueue[0].colours[0])
+						let nextPassed = true;
+						if(curr.size > 4 && errorQueue[0].error > localQuantizer * 0.8){
+							if(sharpener(
+								top_third_large,
+								bottom_third_large,
+								(a,b) => create_vertical_dummy(a,b,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"vertical_dummy"
+							).error < errorQueue[0].error){
+								nextPassed = false
+							}
+							else if(sharpener(
+								left_third_large,
+								right_third_large,
+								(a,b) => create_horizontal_dummy(a,b,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"horizontal_dummy"
+							).error < errorQueue[0].error){
+								nextPassed = false
 							}
 						}
-						else{
-							errorQueue[0].colours.forEach(colour => {
-								writeByte(colour);
+						if(nextPassed){
+							writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
+							if(table_ceiling === 2){
+								if(errorQueue[0].colours.length){
+									writeByte(errorQueue[0].colours[0])
+								}
+							}
+							else{
+								errorQueue[0].colours.forEach(colour => {
+									writeByte(colour);
+								})
+							}
+							for(let i=0;i < curr.size && (i + curr.x) < width;i++){
+								for(let j=0;j < curr.size && (j + curr.y) < height;j++){
+									currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
+								}
+							}
+							previous2x2_curr.push({
+								x: curr.x + 2,
+								y: curr.y + curr.size - 2,
+								size: 2
 							})
+							previous2x2_curr.push({
+								x: curr.x,
+								y: curr.y + curr.size - 2,
+								size: 2
+							});
+							continue
 						}
-						for(let i=0;i < curr.size && (i + curr.x) < width;i++){
-							for(let j=0;j < curr.size && (j + curr.y) < height;j++){
-								currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
-							}
-						}
-						previous2x2_curr.push({
-							x: curr.x + 2,
-							y: curr.y + curr.size - 2,
-							size: 2
-						})
-						previous2x2_curr.push({
-							x: curr.x,
-							y: curr.y + curr.size - 2,
-							size: 2
-						});
-						continue
 					}
 				}
 				writeLargeSymbol("divide",curr.size === 4);
@@ -3285,6 +3385,9 @@ function encoder(imageData,options){
 			encodedData.push(dePlex(bitBuffer.splice(0,8)))
 		}
 	}
+
+	let t1 = performance.now()
+	console.log("Encoding took " + (t1 - t0) + " milliseconds")
 
 	return Uint8Array.from(encodedData)
 }
