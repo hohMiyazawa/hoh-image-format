@@ -632,6 +632,7 @@ function check_tripplets(imageData){
 
 function check_index(imageData){
 	let list = [];
+	const index_limit = Math.min(256,imageData.length/6)
 	for(let i=0;i<imageData.length;i += 3){
 		if(
 			!list.find(
@@ -644,7 +645,7 @@ function check_index(imageData){
 				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
 			)
 		}
-		if(list.length > 256){
+		if(list.length > index_limit){
 			return null
 		}
 	}
@@ -653,6 +654,7 @@ function check_index(imageData){
 
 function check_indexa(imageData,full){
 	let list = [];
+	const index_limit = Math.min(256,imageData.length/8)
 	for(let i=0;i<imageData.length/20;i += 4){
 		if(
 			!list.find(
@@ -666,7 +668,7 @@ function check_indexa(imageData,full){
 				[imageData[i + 0],imageData[i + 1],imageData[i + 2],imageData[i + 3]]
 			)
 		}
-		if(list.length > 256){
+		if(list.length > index_limit){
 			return null
 		}
 	}
@@ -1326,7 +1328,7 @@ const largeSymbolTable = [
 ]
 
 const internal_formats = [
-	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga","indexed","indexeda"
+	"bit","greyscale","greyscalea","rgb","rgba","yiq26","yiq26a","ycocg","ycocga","indexed","indexeda","verbatim","verbatima","verbatimgreyscale","verbatimbit"
 ]
 
 function encoder(imageData,options){
@@ -3228,6 +3230,62 @@ function encoder(imageData,options){
 		encodedData.push(dePlex(bitBuffer.splice(0,8)))
 	}
 
+	if(
+		options.pixelFormat === "rgb"
+		&& options.target_pixelFormat === "yiq26"
+		&& encodedData.length > (9 + width * height * 3)
+	){
+		console.log("bailing out to raw rgb data");
+		encodedData = [];
+		bitBuffer = [];
+		writeByteNative(72);writeByteNative(79);writeByteNative(72);
+		bitBuffer.push(...encodeVarint(width,BYTE_LENGTH));
+		bitBuffer.push(...encodeVarint(height,BYTE_LENGTH));
+		writeByteNative(internal_formats.indexOf("verbatim"));
+		bitBuffer.push(...encodeVarint(0,BYTE_LENGTH));
+
+		yiq26_to_rgb(imageData).forEach(byte => writeByteNative(byte));
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+	}
+	else if(
+		options.target_pixelFormat === "greyscale"
+		&& encodedData.length > (9 + width * height)
+	){
+		console.log("bailing out to raw greyscale data");
+		encodedData = [];
+		bitBuffer = [];
+		writeByteNative(72);writeByteNative(79);writeByteNative(72);
+		bitBuffer.push(...encodeVarint(width,BYTE_LENGTH));
+		bitBuffer.push(...encodeVarint(height,BYTE_LENGTH));
+		writeByteNative(internal_formats.indexOf("verbatimgreyscale"));
+		bitBuffer.push(...encodeVarint(0,BYTE_LENGTH));
+
+		imageData.forEach(byte => writeByteNative(byte));
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+	}
+	else if(
+		options.target_pixelFormat === "bit"
+		&& encodedData.length > (9 + Math.ceil(width * height/8))
+	){
+		console.log("bailing out to raw bit image data");
+		encodedData = [];
+		bitBuffer = [];
+		writeByteNative(72);writeByteNative(79);writeByteNative(72);
+		bitBuffer.push(...encodeVarint(width,BYTE_LENGTH));
+		bitBuffer.push(...encodeVarint(height,BYTE_LENGTH));
+		writeByteNative(internal_formats.indexOf("verbatimbit"));
+		bitBuffer.push(...encodeVarint(0,BYTE_LENGTH));
+
+		bitBuffer = bitBuffer.concat(imageData);
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+	}
+
 	return Uint8Array.from(encodedData)
 }
 
@@ -4557,6 +4615,40 @@ function decoder(hohData,options){
 		let rawData = decodeChannel({bitDepth: 8,indexeda: true});
 		return {
 			imageData: rawData,
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "verbatim"){
+		let rawData = [];
+		for(let i=0;i<width*height;i++){
+			rawData.push(readByteNative(),readByteNative(),readByteNative(),255)
+		}
+		return {
+			imageData: rawData,
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "verbatimgreyscale"){
+		let rawData = [];
+		for(let i=0;i<width*height;i++){
+			let hue = readByteNative()
+			rawData.push(hue,hue,hue,255)
+		}
+		return {
+			imageData: rawData,
+			width: width,
+			height: height
+		}
+	}
+	else if(pixelFormat === "verbatimbit"){
+		let rawData = [];
+		for(let i=0;i<width*height;i++){
+			rawData.push(readBit())
+		}
+		return {
+			imageData: bit_to_rgba(rawData),
 			width: width,
 			height: height
 		}
