@@ -655,7 +655,7 @@ function check_index(imageData){
 function check_indexa(imageData,full){
 	let list = [];
 	const index_limit = Math.min(256,imageData.length/8)
-	for(let i=0;i<imageData.length/20;i += 4){
+	for(let i=0;i<imageData.length;i += 4){
 		if(
 			!list.find(
 				ele => (ele[0] === imageData[i + 0]
@@ -1615,6 +1615,7 @@ function encoder(imageData,options){
 
 			for(let i=0;i<channelData.length;i++){
 				for(let j=0;j<channelData[0].length;j++){
+					let temp = channelData[i][j];
 					channelData[i][j] = translationTable[channelData[i][j]]
 				}
 			}
@@ -1718,12 +1719,12 @@ function encoder(imageData,options){
 				}
 				data.push(col)
 			}
-			/*if(data.flat().filter(a => isNaN(a)).length){
+			/*if(data.flat().filter(a => a === undefined).length){
 				console.log("data",data);
 				for(let i=0;i<data.length;i++){
 					for(let j=0;j<data.length;j++){
 						if(data[i][j] === undefined){
-							console.log(i,j)
+							console.log(i,j,channelData[i][j])
 							throw "data"
 						}
 					}
@@ -1768,7 +1769,7 @@ function encoder(imageData,options){
 				encodedInteger += table_ceiling
 			}
 			if(isNaN(encodedInteger)){
-				console.log(integer);
+				console.log(integer,forige);
 				throw "what"
 			}
 			aritmetic_queue.push(encodedInteger);
@@ -2763,33 +2764,39 @@ function encoder(imageData,options){
 							}
 						}
 						if(nextPassed){
-							writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-							if(table_ceiling === 2){
-								if(errorQueue[0].colours.length){
-									writeByte(errorQueue[0].colours[0])
+							try{
+								writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
+								if(table_ceiling === 2){
+									if(errorQueue[0].colours.length){
+										writeByte(errorQueue[0].colours[0])
+									}
 								}
-							}
-							else{
-								errorQueue[0].colours.forEach(colour => {
-									writeByte(colour);
+								else{
+									errorQueue[0].colours.forEach(colour => {
+										writeByte(colour);
+									})
+								}
+								for(let i=0;i < curr.size && (i + curr.x) < width;i++){
+									for(let j=0;j < curr.size && (j + curr.y) < height;j++){
+										currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
+									}
+								}
+								previous2x2_curr.push({
+									x: curr.x + 2,
+									y: curr.y + curr.size - 2,
+									size: 2
 								})
+								previous2x2_curr.push({
+									x: curr.x,
+									y: curr.y + curr.size - 2,
+									size: 2
+								});
+								continue
 							}
-							for(let i=0;i < curr.size && (i + curr.x) < width;i++){
-								for(let j=0;j < curr.size && (j + curr.y) < height;j++){
-									currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
-								}
+							catch(e){
+								console.log(errorQueue[0]);
+								throw "why???"
 							}
-							previous2x2_curr.push({
-								x: curr.x + 2,
-								y: curr.y + curr.size - 2,
-								size: 2
-							})
-							previous2x2_curr.push({
-								x: curr.x,
-								y: curr.y + curr.size - 2,
-								size: 2
-							});
-							continue
 						}
 					}
 				}
@@ -3109,13 +3116,19 @@ function encoder(imageData,options){
 		/*let DEBUG_small_f = new FrequencyTable(
 			smallSymbolTable.map(symbol => smallSymbolFrequency[symbol])
 		);*/
-		let DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+		let DEBUG_small_f;
 		let forigeg_small = 0;
 		let predictionGrid_small = [];
 		if(table_ceiling === 2){
 			DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
 			for(let i=0;i<16;i++){
 				predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)))
+			}
+		}
+		else{
+			DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+			for(let i=0;i<smallSymbolTable.length;i++){
+				predictionGrid_small.push(new FrequencyTable(new Array(smallSymbolTable.length).fill(1)))
 			}
 		}
 		let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
@@ -3199,8 +3212,17 @@ function encoder(imageData,options){
 						DEBUG_small_f.increment(waiting.symbol);
 					}
 					else{
-						enc.write(DEBUG_small_f,smallSymbolTable.indexOf(waiting.symbol));
-						DEBUG_small_f.increment(smallSymbolTable.indexOf(waiting.symbol));
+						let symbol = smallSymbolTable.indexOf(waiting.symbol);
+						if(DEBUG_small_f.get(forigeg_small) > 64){
+							enc.write(predictionGrid_small[forigeg_small],symbol)
+						}
+						else{
+							enc.write(DEBUG_small_f,symbol)
+						}
+
+						predictionGrid_small[forigeg_small].increment(symbol);
+						forigeg_small = symbol;
+						DEBUG_small_f.increment(symbol);
 					}
 				}
 			}
@@ -3663,13 +3685,19 @@ function decoder(hohData,options){
 				return data
 			}
 
-			let DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+			let DEBUG_small_f;
 			let forigeg_small = 0;
 			let predictionGrid_small = [];
 			if(table_ceiling === 2){
 				DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
 				for(let i=0;i<16;i++){
 					predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)))
+				}
+			}
+			else{
+				DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+				for(let i=0;i<smallSymbolTable.length;i++){
+					predictionGrid_small.push(new FrequencyTable(new Array(smallSymbolTable.length).fill(1)))
 				}
 			}
 			let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
@@ -3712,32 +3740,20 @@ function decoder(hohData,options){
 			}
 
 			let readSmallSymbol = function(){
-				/*let head = smallHuffman;
-				while(head.isInternal){
-					if(readBit()){
-						head = head.right
-					}
-					else{
-						head = head.left
-					}
+				let symbol;
+				if(DEBUG_small_f.get(forigeg_small) > 64){
+					symbol = dec.read(predictionGrid_small[forigeg_small])
 				}
-				return head.symbol*/
-				let symbol = dec.read(DEBUG_small_f);
+				else{
+					symbol = dec.read(DEBUG_small_f)
+				}
 				DEBUG_small_f.increment(symbol);
+				predictionGrid_small[forigeg_small].increment(symbol);
+				forigeg_small = symbol;
 				return smallSymbolTable[symbol]
 			}
 			if(table_ceiling === 2){
 				readSmallSymbol = function(){
-					/*let head = smallHuffman;
-					while(head.isInternal){
-						if(readBit()){
-							head = head.right
-						}
-						else{
-							head = head.left
-						}
-					}
-					return head.symbol*/
 					let symbol;
 					if(DEBUG_small_f.get(forigeg_small) > 32){
 						symbol = dec.read(predictionGrid_small[forigeg_small])
