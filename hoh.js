@@ -3132,8 +3132,12 @@ function encoder(imageData,options){
 			}
 		}
 		let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
+		let forigeg_large = 0;
+		let predictionGrid_large = [];
+		for(let i=0;i<largeSymbolTable.length;i++){
+			predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
+		}
 
-		let DEBUG_four_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
 		/*let DEBUG_large_f = new FrequencyTable(
 			largeSymbolTable.map(symbol => largeSymbolFrequency[symbol])
 		);*/
@@ -3157,6 +3161,17 @@ function encoder(imageData,options){
 		//let DEBUG_integer_f = new FrequencyTable(modifiedFreqs);
 
 		let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
+		let predictionGrid_integer = [];
+		if(table_ceiling === 2){
+			for(let i=0;i<16;i++){
+				predictionGrid_integer.push(new FrequencyTable(new Array(2).fill(1)))
+			}
+		}
+		else{
+			for(let i=0;i<smallSymbolTable.length;i++){
+				predictionGrid_integer.push(new FrequencyTable(new Array(table_ceiling).fill(1)))
+			}
+		}
 		//let DEBUG_integer_f = new FrequencyTable(primitive_bi_huffman(table_ceiling));
 //end debug
 
@@ -3170,36 +3185,34 @@ function encoder(imageData,options){
 		}
 
 		let enc = new ArithmeticEncoder(NUM_OF_BITS, testwriter);
-		let oldQueue = [];
 
 		aritmetic_queue.forEach(waiting => {
 			try{
 				if(isFinite(waiting)){
-					//bitBuffer.push(...colourBook[waiting]);
-					enc.write(DEBUG_integer_f,waiting);
-					DEBUG_integer_f.increment(waiting);
-					oldQueue.push(waiting);
-					if(oldQueue.length > 2000){
-						let ele = oldQueue.shift();
-						DEBUG_integer_f.set(ele,DEBUG_integer_f.get(ele) - 1)
-					}
-				}
-				else if(waiting.size === "large"){
-					//bitBuffer.push(...largeSymbolBook[waiting.symbol]);
-					if(false && waiting.is4x4){
-						enc.write(DEBUG_four_f,largeSymbolTable.indexOf(waiting.symbol));
-						DEBUG_four_f.increment(largeSymbolTable.indexOf(waiting.symbol));
-						DEBUG_large_f.increment(largeSymbolTable.indexOf(waiting.symbol));
-						DEBUG_four_f.increment(largeSymbolTable.indexOf(waiting.symbol));
+					if(DEBUG_small_f.get(forigeg_small) > 128){
+						enc.write(predictionGrid_integer[forigeg_small],waiting)
 					}
 					else{
-						enc.write(DEBUG_large_f,largeSymbolTable.indexOf(waiting.symbol));
-						DEBUG_large_f.increment(largeSymbolTable.indexOf(waiting.symbol));
-						DEBUG_four_f.increment(largeSymbolTable.indexOf(waiting.symbol));
+						enc.write(DEBUG_integer_f,waiting);
 					}
+					DEBUG_integer_f.increment(waiting);
+					predictionGrid_integer[forigeg_small].increment(waiting)
+				}
+				else if(waiting.size === "large"){
+					let symbol = largeSymbolTable.indexOf(waiting.symbol);
+
+					if(DEBUG_large_f.get(forigeg_large) > 128){
+						enc.write(predictionGrid_large[forigeg_large],symbol)
+					}
+					else{
+						enc.write(DEBUG_large_f,symbol)
+					}
+
+					predictionGrid_large[forigeg_large].increment(symbol);
+					forigeg_large = symbol;
+					DEBUG_large_f.increment(symbol);
 				}
 				else{
-					//bitBuffer.push(...smallSymbolBook[waiting.symbol]);
 					if(table_ceiling === 2){
 						if(DEBUG_small_f.get(forigeg_small) > 32){
 							enc.write(predictionGrid_small[forigeg_small],waiting.symbol)
@@ -3701,7 +3714,11 @@ function decoder(hohData,options){
 				}
 			}
 			let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
-			let DEBUG_four_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
+			let forigeg_large = 0;
+			let predictionGrid_large = [];
+			for(let i=0;i<largeSymbolTable.length;i++){
+				predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
+			}
 
 			let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
 
@@ -3724,18 +3741,16 @@ function decoder(hohData,options){
 			let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader)
 
 			let readLargeSymbol = function(){
-				/*let head = largeHuffman;
-				while(head.isInternal){
-					if(readBit()){
-						head = head.right
-					}
-					else{
-						head = head.left
-					}
+				let symbol;
+				if(DEBUG_large_f.get(forigeg_large) > 128){
+					symbol = dec.read(predictionGrid_large[forigeg_large])
 				}
-				return head.symbol*/
-				let symbol = dec.read(DEBUG_large_f);
+				else{
+					symbol = dec.read(DEBUG_large_f)
+				}
 				DEBUG_large_f.increment(symbol);
+				predictionGrid_large[forigeg_large].increment(symbol);
+				forigeg_large = symbol;
 				return largeSymbolTable[symbol]
 			}
 
@@ -3751,7 +3766,8 @@ function decoder(hohData,options){
 				predictionGrid_small[forigeg_small].increment(symbol);
 				forigeg_small = symbol;
 				return smallSymbolTable[symbol]
-			}
+			};
+			let predictionGrid_integer = [];
 			if(table_ceiling === 2){
 				readSmallSymbol = function(){
 					let symbol;
@@ -3766,43 +3782,46 @@ function decoder(hohData,options){
 					forigeg_small = symbol;
 					return symbol
 				}
+				for(let i=0;i<16;i++){
+					predictionGrid_integer.push(new FrequencyTable(new Array(2).fill(1)))
+				}
+			}
+			else{
+				for(let i=0;i<smallSymbolTable.length;i++){
+					predictionGrid_integer.push(new FrequencyTable(new Array(table_ceiling).fill(1)))
+				}
 			}
 
 			let forige = 0;
 
-			let oldQueue = [];
-
 			let readColour = function(){
-				/*let head = colourHuffman;
-				while(head.isInternal){
-					if(readBit()){
-						head = head.right
-					}
-					else{
-						head = head.left
-					}
+				let symbol;
+				if(DEBUG_small_f.get(forigeg_small) > 128){
+					symbol = dec.read(predictionGrid_integer[forigeg_small])
 				}
-				return parseInt(head.symbol)*/
-				let symbol = dec.read(DEBUG_integer_f);
+				else{
+					symbol = dec.read(DEBUG_integer_f)
+				}
+				predictionGrid_integer[forigeg_small].increment(symbol);
 				DEBUG_integer_f.increment(symbol);
-				oldQueue.push(symbol);
-				if(oldQueue.length > 2000){
-					let ele = oldQueue.shift();
-					DEBUG_integer_f.set(ele,DEBUG_integer_f.get(ele) - 1)
-				}
+
+
 				let decodedInteger = (symbol + forige) % table_ceiling;
 				forige = decodedInteger
 				return decodedInteger
 			}
 			if(table_ceiling === 2){
 				readColour = function(){
-					let symbol = dec.read(DEBUG_integer_f);
-					DEBUG_integer_f.increment(symbol);
-					oldQueue.push(symbol);
-					if(oldQueue.length > 2000){
-						let ele = oldQueue.shift();
-						DEBUG_integer_f.set(ele,DEBUG_integer_f.get(ele) - 1)
+					let symbol;
+					if(DEBUG_small_f.get(forigeg_small) > 128){
+						symbol = dec.read(predictionGrid_integer[forigeg_small])
 					}
+					else{
+						symbol = dec.read(DEBUG_integer_f)
+					}
+					predictionGrid_integer[forigeg_small].increment(symbol);
+					DEBUG_integer_f.increment(symbol);
+
 					return symbol
 				}
 			}
@@ -4560,6 +4579,7 @@ function decoder(hohData,options){
 			}
 		}
 		catch(e){
+			console.log(e);
 			console.log("INTER");
 			let translatedFallback = translationTable.findIndex(a => a === options.fallback);
 			if(translatedFallback === -1){
