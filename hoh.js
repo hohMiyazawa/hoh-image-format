@@ -3110,8 +3110,13 @@ function encoder(imageData,options){
 			smallSymbolTable.map(symbol => smallSymbolFrequency[symbol])
 		);*/
 		let DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+		let forigeg_small = 0;
+		let predictionGrid_small = [];
 		if(table_ceiling === 2){
 			DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
+			for(let i=0;i<16;i++){
+				predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)))
+			}
 		}
 		let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
 
@@ -3183,7 +3188,14 @@ function encoder(imageData,options){
 				else{
 					//bitBuffer.push(...smallSymbolBook[waiting.symbol]);
 					if(table_ceiling === 2){
-						enc.write(DEBUG_small_f,waiting.symbol);
+						if(DEBUG_small_f.get(forigeg_small) > 32){
+							enc.write(predictionGrid_small[forigeg_small],waiting.symbol)
+						}
+						else{
+							enc.write(DEBUG_small_f,waiting.symbol)
+						}
+						predictionGrid_small[forigeg_small].increment(waiting.symbol);
+						forigeg_small = waiting.symbol;
 						DEBUG_small_f.increment(waiting.symbol);
 					}
 					else{
@@ -3652,8 +3664,13 @@ function decoder(hohData,options){
 			}
 
 			let DEBUG_small_f = new FrequencyTable(new Array(smallSymbolTable.length).fill(1));
+			let forigeg_small = 0;
+			let predictionGrid_small = [];
 			if(table_ceiling === 2){
 				DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
+				for(let i=0;i<16;i++){
+					predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)))
+				}
 			}
 			let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
 			let DEBUG_four_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
@@ -3721,8 +3738,16 @@ function decoder(hohData,options){
 						}
 					}
 					return head.symbol*/
-					let symbol = dec.read(DEBUG_small_f);
+					let symbol;
+					if(DEBUG_small_f.get(forigeg_small) > 32){
+						symbol = dec.read(predictionGrid_small[forigeg_small])
+					}
+					else{
+						symbol = dec.read(DEBUG_small_f)
+					}
 					DEBUG_small_f.increment(symbol);
+					predictionGrid_small[forigeg_small].increment(symbol);
+					forigeg_small = symbol;
 					return symbol
 				}
 			}
