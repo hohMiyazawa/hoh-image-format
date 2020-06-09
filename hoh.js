@@ -1741,8 +1741,6 @@ function encoder(imageData,options){
 		let largeSymbolFrequency = {};
 		largeSymbolTable.forEach(word => largeSymbolFrequency[word] = 0);
 
-		let integerFrequency = new Array(CHANNEL_POWER).fill(0);
-
 		let writeSymbol = function(symbol){
 			aritmetic_queue.push({size: "small",symbol: symbol});
 			smallSymbolFrequency[symbol]++
@@ -1761,19 +1759,8 @@ function encoder(imageData,options){
 			}
 			largeSymbolFrequency[symbol]++
 		}
-		let forige = 0;
 		let writeByte = function(integer){
-			let encodedInteger = integer - forige;
-			forige = integer;
-			if(encodedInteger < 0){
-				encodedInteger += table_ceiling
-			}
-			if(isNaN(encodedInteger)){
-				console.log(integer,forige);
-				throw "what"
-			}
-			aritmetic_queue.push(encodedInteger);
-			integerFrequency[encodedInteger]++
+			aritmetic_queue.push(integer)
 		}
 		let sharpener = function(a,b,resolver,errorFunction,symbol){
 			let patch = resolver(a,b);
@@ -1815,8 +1802,7 @@ function encoder(imageData,options){
 		let asample_dct = sample_dct;
 		if(table_ceiling === 2){
 			writeByte = function(integer){
-				aritmetic_queue.push(integer);
-				integerFrequency[integer]++
+				aritmetic_queue.push(integer)
 			}
 			if(options.forceGradients){
 				sharpener = function(a,b,resolver,errorFunction,symbol){
@@ -3098,15 +3084,6 @@ function encoder(imageData,options){
 			}
 		}
 
-		//console.log("???",integerFrequency);
-		/*console.log("  usage",usage,ideal_colour_entropy)
-
-		console.log("  usage_l",usage_l,ideal_large_entropy)
-		console.log("  usage_s",usage_s,ideal_small_entropy)
-		console.log("  total usage",usage + usage_l + usage_s);
-		console.log("  real total usage",usage + usage_l + usage_s + encoded_huff_large.length + encoded_huff_small.length + encoded_huff_cols.length);
-
-		console.log("i_freq",integerFrequency);*/
 		console.log("l_freq",largeSymbolFrequency);
 		console.log("s_freq",smallSymbolFrequency);/*
 
@@ -3138,30 +3115,8 @@ function encoder(imageData,options){
 			predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
 		}
 
-		/*let DEBUG_large_f = new FrequencyTable(
-			largeSymbolTable.map(symbol => largeSymbolFrequency[symbol])
-		);*/
-
-		//let DEBUG_integer_f = new FrequencyTable(integerFrequency);
-//debug
-		/*let largest_val_i = 0;
-		integerFrequency.forEach(val => {
-			if(val > largest_val_i){
-				largest_val_i = val
-			}
-		})
-		console.log("largest_val_i",largest_val_i);
-		let scaleFactor = largest_val_i/255;
-		let modifiedFreqs = integerFrequency.map(val => {
-			if(val === largest_val_i){
-				return 255
-			}
-			return Math.ceil(val/scaleFactor)
-		})*/
-		//let DEBUG_integer_f = new FrequencyTable(modifiedFreqs);
-
-		let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
-		let predictionGrid_integer = [];
+		//let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
+		/*let predictionGrid_integer = [];
 		if(table_ceiling === 2){
 			for(let i=0;i<16;i++){
 				predictionGrid_integer.push(new FrequencyTable(new Array(2).fill(1)))
@@ -3171,8 +3126,7 @@ function encoder(imageData,options){
 			for(let i=0;i<smallSymbolTable.length;i++){
 				predictionGrid_integer.push(new FrequencyTable(new Array(table_ceiling).fill(1)))
 			}
-		}
-		//let DEBUG_integer_f = new FrequencyTable(primitive_bi_huffman(table_ceiling));
+		}*/
 //end debug
 
 		let middleBuffer = [];
@@ -3186,17 +3140,28 @@ function encoder(imageData,options){
 
 		let enc = new ArithmeticEncoder(NUM_OF_BITS, testwriter);
 
+		let forige = 0;
+		let absolutes = new Array(table_ceiling).fill(1);
+		let deltas = new Array(table_ceiling).fill(1);
+
 		aritmetic_queue.forEach(waiting => {
 			try{
 				if(isFinite(waiting)){
-					if(DEBUG_small_f.get(forigeg_small) > 128){
-						enc.write(predictionGrid_integer[forigeg_small],waiting)
+					let encodedInteger = waiting - forige;
+					if(encodedInteger < 0){
+						encodedInteger += table_ceiling
 					}
-					else{
-						enc.write(DEBUG_integer_f,waiting);
-					}
-					DEBUG_integer_f.increment(waiting);
-					predictionGrid_integer[forigeg_small].increment(waiting)
+
+					let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
+						return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
+					}))
+					//console.log(DEBUG_integer_f)
+					
+					enc.write(DEBUG_integer_f,waiting);
+					forige = waiting;
+					deltas[encodedInteger]++;
+					absolutes[waiting]++
+					//DEBUG_integer_f.increment(waiting)
 				}
 				else if(waiting.size === "large"){
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
@@ -3246,6 +3211,9 @@ function encoder(imageData,options){
 		});
 		
 		enc.finish();
+		//console.log(DEBUG_integer_f)
+		console.log(absolutes);
+		console.log(deltas);
 
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
 		
@@ -3720,7 +3688,6 @@ function decoder(hohData,options){
 				predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
 			}
 
-			let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
 
 			let max_reads = readVarint(BYTE_LENGTH);
 
@@ -3767,7 +3734,7 @@ function decoder(hohData,options){
 				forigeg_small = symbol;
 				return smallSymbolTable[symbol]
 			};
-			let predictionGrid_integer = [];
+
 			if(table_ceiling === 2){
 				readSmallSymbol = function(){
 					let symbol;
@@ -3782,48 +3749,24 @@ function decoder(hohData,options){
 					forigeg_small = symbol;
 					return symbol
 				}
-				for(let i=0;i<16;i++){
-					predictionGrid_integer.push(new FrequencyTable(new Array(2).fill(1)))
-				}
-			}
-			else{
-				for(let i=0;i<smallSymbolTable.length;i++){
-					predictionGrid_integer.push(new FrequencyTable(new Array(table_ceiling).fill(1)))
-				}
 			}
 
 			let forige = 0;
+			let absolutes = new Array(table_ceiling).fill(1);
+			let deltas = new Array(table_ceiling).fill(1);
 
 			let readColour = function(){
-				let symbol;
-				if(DEBUG_small_f.get(forigeg_small) > 128){
-					symbol = dec.read(predictionGrid_integer[forigeg_small])
-				}
-				else{
-					symbol = dec.read(DEBUG_integer_f)
-				}
-				predictionGrid_integer[forigeg_small].increment(symbol);
-				DEBUG_integer_f.increment(symbol);
+				
+				let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
+					return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
+				}))
 
-
-				let decodedInteger = (symbol + forige) % table_ceiling;
-				forige = decodedInteger
-				return decodedInteger
-			}
-			if(table_ceiling === 2){
-				readColour = function(){
-					let symbol;
-					if(DEBUG_small_f.get(forigeg_small) > 128){
-						symbol = dec.read(predictionGrid_integer[forigeg_small])
-					}
-					else{
-						symbol = dec.read(DEBUG_integer_f)
-					}
-					predictionGrid_integer[forigeg_small].increment(symbol);
-					DEBUG_integer_f.increment(symbol);
-
-					return symbol
-				}
+				let symbol = dec.read(DEBUG_integer_f);
+				let encodedInteger = (symbol - forige + table_ceiling) % table_ceiling;
+				forige = symbol;
+				deltas[encodedInteger]++;
+				absolutes[symbol]++
+				return symbol
 			}
 
 
