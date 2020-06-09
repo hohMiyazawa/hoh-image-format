@@ -632,8 +632,14 @@ function check_tripplets(imageData){
 
 function check_index(imageData){
 	let list = [];
-	const index_limit = Math.min(256,imageData.length/6)
+	const index_limit = Math.min(256,imageData.length/6);
+	let r_sum = 0;
+	let g_sum = 0;
+	let b_sum = 0;
 	for(let i=0;i<imageData.length;i += 3){
+		r_sum += imageData[i + 0];
+		g_sum += imageData[i + 1];
+		b_sum += imageData[i + 2];
 		if(
 			!list.find(
 				ele => ele[0] === imageData[i + 0]
@@ -649,7 +655,23 @@ function check_index(imageData){
 			return null
 		}
 	}
-	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114)
+	/*r_sum = r_sum/(imageData.length/3);
+	g_sum = g_sum/(imageData.length/3);
+	b_sum = b_sum/(imageData.length/3);
+	let v_r = 0;
+	let v_g = 0;
+	let v_b = 0;
+	for(let i=0;i<imageData.length;i += 3){
+		v_r += Math.pow(imageData[i + 0] - r_sum,2);
+		v_g += Math.pow(imageData[i + 1] - g_sum,2);
+		v_b += Math.pow(imageData[i + 2] - b_sum,2);
+	}
+	console.log(r_sum,g_sum,b_sum);
+	console.log(v_r/(imageData.length/3),v_g/(imageData.length/3),v_b/(imageData.length/3));*/
+
+	//return list.sort((a,b) => a[0] * v_r * 0.299 + a[1] * v_g* 0.587 + a[2] * v_b * 0.299 - b[0] * v_r * 0.299 - b[1] * v_g * 0.587 - b[2] * v_b * 0.299);
+	//return list.sort((a,b) => a[0] * r_sum * 0.299 + a[1] * g_sum * 0.587 + a[2] * b_sum * 0.114 - b[0] * r_sum * 0.299 - b[1]* g_sum * 0.587 - b[2] * b_sum * 0.114);
+	return list
 }
 
 function check_indexa(imageData,full){
@@ -1432,9 +1454,7 @@ function encoder(imageData,options){
 			else{
 				c_index = check_index(imageData);
 				if(c_index){
-					imageData = rgb_to_indexed(imageData,c_index);
 					options.target_pixelFormat = "indexed"
-					console.log("c_index",c_index);
 				}
 			}
 		}
@@ -1502,43 +1522,33 @@ function encoder(imageData,options){
 
 	let channels = deMultiplexChannels(imageData,width,height);
 
-	let error_compare = function(chunck1,chunck2,offx,offy){
-		let sumError = 0;
-		for(let i=0;i<chunck1.length;i++){
-			for(let j=0;j<chunck1[i].length;j++){
-				if(offx + i < width && offy + j < height){
-					sumError += Math.pow(chunck2[i][j] - chunck1[i][j],2)
-				}
-			}
-		}
-		return sumError/(chunck1.length * chunck1[0].length)
-	}
-
 
 	encodeChannel = function(channelData,c_options){
-
 		const CHANNEL_LENGTH = c_options.bitDepth;
 		const CHANNEL_POWER = Math.pow(2,CHANNEL_LENGTH);
 		const CHANNEL_MAX_VAL = CHANNEL_POWER - 1;
+		
+		let bitBuffer = [];
+
 		if(!c_options.quantizer){
 			c_options.quantizer = options.quantizer
 		}
 
 		if(c_options.indexed){
-			writeByteNative(c_options.c_index.length - 1);
+			bitBuffer.push(...rePlex(c_options.c_index.length - 1,8));
 			c_options.c_index.forEach(colour => {
-				writeByteNative(colour[0]);
-				writeByteNative(colour[1]);
-				writeByteNative(colour[2]);
+				bitBuffer.push(...rePlex(colour[0],8));
+				bitBuffer.push(...rePlex(colour[1],8));
+				bitBuffer.push(...rePlex(colour[2],8));
 			})
 		}
 		else if(c_options.indexeda){
-			writeByteNative(c_options.c_index.length - 1);
+			bitBuffer.push(...rePlex(c_options.c_index.length - 1,8));
 			c_options.c_index.forEach(colour => {
-				writeByteNative(colour[0]);
-				writeByteNative(colour[1]);
-				writeByteNative(colour[2]);
-				writeByteNative(colour[3]);
+				bitBuffer.push(...rePlex(colour[0],8));
+				bitBuffer.push(...rePlex(colour[1],8));
+				bitBuffer.push(...rePlex(colour[2],8));
+				bitBuffer.push(...rePlex(colour[3],8));
 			})
 		}
 
@@ -1624,8 +1634,14 @@ function encoder(imageData,options){
 
 		let min_black = frequencyTable ? frequencyTable.findIndex(a => a) : 0;
 
-		function grower(num){
+		let grower = function(num){
 			return Math.max(num - num*num/512,1)
+		}
+
+		if(c_options.name === "Co" || c_options.name === "Cg"){
+			grower = function(num){
+				return 128
+			}
 		}
 
 		let error_compare = function(chunck1,chunck2,offx,offy){
@@ -1659,6 +1675,24 @@ function encoder(imageData,options){
 				}
 			}
 			return sumError/(chunck1.length * chunck1[0].length)
+		}
+		if(false && c_options.quantizer === 0){
+			error_compare = function(chunck1,chunck2,offx,offy){
+				for(let i=0;i<chunck1.length;i++){
+					for(let j=0;j<chunck1[i].length;j++){
+						if(offx + i < width && offy + j < height){
+							if(
+								Math.abs(
+									chunck2[i][j] - chunck1[i][j]
+								)
+							){
+								return 1
+							}
+						}
+					}
+				}
+				return 0
+			}
 		}
 			
 		let currentEncode = [];
@@ -1765,7 +1799,7 @@ function encoder(imageData,options){
 		let sharpener = function(a,b,resolver,errorFunction,symbol){
 			let patch = resolver(a,b);
 			let error = errorFunction(patch);
-			if(options.forceGradients){
+			if(options.forceGradients && c_options.quantizer){
 				let new_a = Math.min(a + 1,table_ceiling - 1);
 				let diff = 1;
 				if(a < b){
@@ -1912,7 +1946,7 @@ function encoder(imageData,options){
 					previous32x32_curr.shift()
 				}
 			}
-
+try{
 			if(
 				(
 					options.maxBlockSize && curr.size > options.maxBlockSize
@@ -1951,10 +1985,15 @@ function encoder(imageData,options){
 				})
 				continue
 			}
+}
+catch(e){
+	console.log(curr);
+	console.log(channelData);
+	throw "whyyyy"
+}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
 			if(curr.size >= 4){
 				let errorQueue = [];
-				//let localQuantizer = (options.quantizer * (1 - Math.sqrt(curr.size/encoding_size))) / (1 + (curr.size)/16);
 				let localQuantizer = 100*c_options.quantizer/(curr.size);
 				//let localQuantizer = options.quantizer;
 
@@ -1968,7 +2007,7 @@ function encoder(imageData,options){
 					colours: [average]
 				})
 				let mArr;
-				if(options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
+				if(c_options.quantizer === 0){//only the corner pixels matter in lossless mode, so about 25% of the encoding time can be saved here
 					mArr = [
 						chunck[0][0],
 						chunck[0][0],
@@ -2388,7 +2427,7 @@ function encoder(imageData,options){
 				let bottom_third_large;
 				let left_third_large;
 				let right_third_large;
-				if(options.quantizer > 0){
+				if(c_options.quantizer > 0){
 					left_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[9] + mArr[12] + mArr[13]
 						+ mArr[2]/2 + mArr[6]/2 + mArr[10]/2 + mArr[14]/2
@@ -3167,13 +3206,11 @@ function encoder(imageData,options){
 						let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
 							return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
 						}))
-						//console.log(DEBUG_integer_f)
 						
 						enc.write(DEBUG_integer_f,waiting);
 						forige = waiting;
 						deltas[encodedInteger]++;
 						absolutes[waiting]++
-						//DEBUG_integer_f.increment(waiting)
 					}
 				}
 				else if(waiting.size === "large"){
@@ -3229,142 +3266,273 @@ function encoder(imageData,options){
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
 		
 		bitBuffer = bitBuffer.concat(middleBuffer);
+
+		return bitBuffer
+	}
+
+	if(options.target_pixelFormat === "yiq26a"){
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[3],{
+			bitDepth: 8,
+			name: "alpha",
+			quantizer: 0
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "Y",
+			quantizer: options.quantizer
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
+			bitDepth: 9,
+			name: "I",
+			quantizer: options.quantizer
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
+			bitDepth: 9,
+			name: "Q",
+			quantizer: options.quantizer
+		}))
 		while(bitBuffer.length > 7){
 			encodedData.push(dePlex(bitBuffer.splice(0,8)))
 		}
 	}
-
-	if(options.target_pixelFormat === "yiq26a"){
-		encodeChannel(channels[3],{
-			bitDepth: 8,
-			name: "alpha",
-			quantizer: 0
-		})
-		encodeChannel(channels[0],{
-			bitDepth: 8,
-			name: "Y",
-			quantizer: options.quantizer
-		})
-		encodeChannel(channels[1],{
-			bitDepth: 9,
-			name: "I",
-			quantizer: options.quantizer
-		})
-		encodeChannel(channels[2],{
-			bitDepth: 9,
-			name: "Q",
-			quantizer: options.quantizer
-		})
-	}
 	else if(options.target_pixelFormat === "yiq26"){
-		encodeChannel(channels[0],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
 			quantizer: options.quantizer
-		})
-		encodeChannel(channels[1],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
 			bitDepth: 9,
 			name: "I",
 			quantizer: options.colourQuantizer
-		})
-		encodeChannel(channels[2],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
 			bitDepth: 9,
 			name: "Q",
 			quantizer: options.colourQuantizer
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "ycocg"){
-		encodeChannel(channels[0],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
 			quantizer: options.quantizer
-		})
-		encodeChannel(channels[1],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
 			bitDepth: 8,
 			name: "Co",
 			quantizer: options.colourQuantizer
-		})
-		encodeChannel(channels[2],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
 			bitDepth: 8,
 			name: "Cg",
 			quantizer: options.colourQuantizer
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "ycocga"){
-		encodeChannel(channels[3],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[3],{
 			bitDepth: 8,
 			name: "alpha",
 			quantizer: 0
-		})
-		encodeChannel(channels[0],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
 			quantizer: options.quantizer
-		})
-		encodeChannel(channels[1],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
 			bitDepth: 8,
 			name: "Co",
 			quantizer: options.colourQuantizer
-		})
-		encodeChannel(channels[2],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
 			bitDepth: 8,
 			name: "Cg",
 			quantizer: options.colourQuantizer
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "rgba"){
-		encodeChannel(channels[3],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[3],{
 			bitDepth: 8,
 			name: "alpha",
 			quantizer: 0
-		})
-		encodeChannel(channels[1],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
 			bitDepth: 8,
 			name: "g",
 			quantizer: options.quantizer
-		})
-		encodeChannel(channels[0],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "r",
 			quantizer: options.quantizer
-		})
-		encodeChannel(channels[2],{
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
 			bitDepth: 8,
 			name: "b",
 			quantizer: options.quantizer
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "greyscale"){
-		encodeChannel(channels[0],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "Y",
 			quantizer: options.quantizer
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "bit"){
-		encodeChannel(channels[0],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 1,
 			name: "bitmap",
 			quantizer: 0
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "indexed"){
-		encodeChannel(channels[0],{
-			bitDepth: 8,
-			name: "indexed",
-			quantizer: options.quantizer,
-			indexed: true,
-			c_index: c_index
-		})
+		const luma_compare = (a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114;
+		if(options.multiPassIndexed && options.quantizer === 0){
+			c_index.sort(luma_compare);
+			let lumaData = rgb_to_indexed(imageData,c_index);
+			let luma_buffer = encodeChannel(deMultiplexChannels(lumaData,width,height)[0],{
+				bitDepth: 8,
+				name: "indexed",
+				quantizer: options.quantizer,
+				indexed: true,
+				c_index: c_index
+			})
+			let red_bin = [];
+			let green_bin = [];
+			let blue_bin = [];
+			c_index.forEach(colour => {
+				if(colour[0] > colour[1] && colour[0] > colour[2]){
+					red_bin.push(colour)
+				}
+				else if(colour[1] > colour[2]){
+					green_bin.push(colour)
+				}
+				else{
+					blue_bin.push(colour)
+				}
+			});
+			let c_index2 = red_bin.sort(luma_compare).concat(green_bin.sort(luma_compare)).concat(blue_bin.sort(luma_compare));
+			let lumaData2 = rgb_to_indexed(imageData,c_index2);
+			let luma_buffer2 = encodeChannel(deMultiplexChannels(lumaData2,width,height)[0],{
+				bitDepth: 8,
+				name: "indexed",
+				quantizer: options.quantizer,
+				indexed: true,
+				c_index: c_index2
+			})
+			if(luma_buffer.length <= luma_buffer2.length){
+				bitBuffer = bitBuffer.concat(luma_buffer)
+			}
+			else{
+				bitBuffer = bitBuffer.concat(luma_buffer2);
+				console.log(`using optimized palette (${Math.round(100*(1 - luma_buffer2.length/luma_buffer.length))}% smaller)`)
+			}
+		}
+		else{
+			c_index.sort(luma_compare);
+			imageData = rgb_to_indexed(imageData,c_index);
+			bitBuffer = bitBuffer.concat(encodeChannel(deMultiplexChannels(imageData,width,height)[0],{
+				bitDepth: 8,
+				name: "indexed",
+				quantizer: options.quantizer,
+				indexed: true,
+				c_index: c_index
+			}))
+		}
+
+/*
+	let red_bin = [];
+	let green_bin = [];
+	let blue_bin = [];
+	list.forEach(colour => {
+		if(colour[0] > colour[1] && colour[0] > colour[2]){
+			red_bin.push(colour)
+		}
+		else if(colour[1] > colour[2]){
+			green_bin.push(colour)
+		}
+		else{
+			blue_bin.push(colour)
+		}
+	});
+	console.log(red_bin,green_bin,blue_bin);
+
+	return red_bin.sort(luma_compare).concat(green_bin.sort(luma_compare)).concat(blue_bin.sort(luma_compare))
+*/
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 	else if(options.target_pixelFormat === "indexeda"){
-		encodeChannel(channels[0],{
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "indexeda",
 			quantizer: options.quantizer,
 			indexeda: true,
 			c_index: c_index
-		})
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
 	}
 
 
