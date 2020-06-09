@@ -1801,9 +1801,6 @@ function encoder(imageData,options){
 		}
 		let asample_dct = sample_dct;
 		if(table_ceiling === 2){
-			writeByte = function(integer){
-				aritmetic_queue.push(integer)
-			}
 			if(options.forceGradients){
 				sharpener = function(a,b,resolver,errorFunction,symbol){
 					let patch = resolver(0,1);
@@ -3144,24 +3141,40 @@ function encoder(imageData,options){
 		let absolutes = new Array(table_ceiling).fill(1);
 		let deltas = new Array(table_ceiling).fill(1);
 
+		let black_stat = new FrequencyTable([1,1]);
+		let white_stat = new FrequencyTable([1,1]);
+
 		aritmetic_queue.forEach(waiting => {
 			try{
 				if(isFinite(waiting)){
-					let encodedInteger = waiting - forige;
-					if(encodedInteger < 0){
-						encodedInteger += table_ceiling
+					if(table_ceiling === 2){
+						if(forige === 0){
+							enc.write(black_stat,waiting);
+							black_stat.increment(waiting);
+						}
+						else{
+							enc.write(white_stat,waiting);
+							white_stat.increment(waiting);
+						}
+						forige = waiting;
 					}
+					else{
+						let encodedInteger = waiting - forige;
+						if(encodedInteger < 0){
+							encodedInteger += table_ceiling
+						}
 
-					let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
-						return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
-					}))
-					//console.log(DEBUG_integer_f)
-					
-					enc.write(DEBUG_integer_f,waiting);
-					forige = waiting;
-					deltas[encodedInteger]++;
-					absolutes[waiting]++
-					//DEBUG_integer_f.increment(waiting)
+						let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
+							return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
+						}))
+						//console.log(DEBUG_integer_f)
+						
+						enc.write(DEBUG_integer_f,waiting);
+						forige = waiting;
+						deltas[encodedInteger]++;
+						absolutes[waiting]++
+						//DEBUG_integer_f.increment(waiting)
+					}
 				}
 				else if(waiting.size === "large"){
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
@@ -3212,8 +3225,6 @@ function encoder(imageData,options){
 		
 		enc.finish();
 		//console.log(DEBUG_integer_f)
-		console.log(absolutes);
-		console.log(deltas);
 
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
 		
@@ -3769,10 +3780,22 @@ function decoder(hohData,options){
 				return symbol
 			}
 
-
-			let forbidden = [];
-			for(let i=0;i<width;i++){
-				forbidden.push(new Array(height).fill(false))
+			if(table_ceiling === 2){
+				let black_stat = new FrequencyTable([1,1]);
+				let white_stat = new FrequencyTable([1,1]);
+				readColour = function(){
+					let symbol;
+					if(forige === 0){
+						symbol = dec.read(black_stat);
+						black_stat.increment(symbol);
+					}
+					else{
+						symbol = dec.read(white_stat);
+						white_stat.increment(symbol);
+					}
+					forige = symbol;
+					return symbol
+				}
 			}
 
 			let write2x2 = function(curr,a,b,c,d){
