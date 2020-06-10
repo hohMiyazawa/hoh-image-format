@@ -1522,6 +1522,8 @@ function encoder(imageData,options){
 
 	let channels = deMultiplexChannels(imageData,width,height);
 
+	let hasAlphaMap = false;
+	let alphaMap;
 
 	encodeChannel = function(channelData,c_options){
 		const CHANNEL_LENGTH = c_options.bitDepth;
@@ -1676,22 +1678,42 @@ function encoder(imageData,options){
 			}
 			return sumError/(chunck1.length * chunck1[0].length)
 		}
-		if(false && c_options.quantizer === 0){
-			error_compare = function(chunck1,chunck2,offx,offy){
-				for(let i=0;i<chunck1.length;i++){
-					for(let j=0;j<chunck1[i].length;j++){
-						if(offx + i < width && offy + j < height){
-							if(
-								Math.abs(
-									chunck2[i][j] - chunck1[i][j]
-								)
-							){
-								return 1
+		if(c_options.quantizer === 0){
+			if(hasAlphaMap){
+				error_compare = function(chunck1,chunck2,offx,offy){
+					for(let i=0;i<chunck1.length;i++){
+						for(let j=0;j<chunck1[i].length;j++){
+							if(offx + i < width && offy + j < height){
+								if(
+									Math.abs(
+										chunck2[i][j] - chunck1[i][j]
+									) && (!alphaMap[i + offx][j + offy])
+								){
+									return 1
+								}
 							}
 						}
 					}
+					return 0
 				}
-				return 0
+			}
+			else{
+				error_compare = function(chunck1,chunck2,offx,offy){
+					for(let i=0;i<chunck1.length;i++){
+						for(let j=0;j<chunck1[i].length;j++){
+							if(offx + i < width && offy + j < height){
+								if(
+									Math.abs(
+										chunck2[i][j] - chunck1[i][j]
+									)
+								){
+									return 1
+								}
+							}
+						}
+					}
+					return 0
+				}
 			}
 		}
 			
@@ -1946,7 +1968,6 @@ function encoder(imageData,options){
 					previous32x32_curr.shift()
 				}
 			}
-try{
 			if(
 				(
 					options.maxBlockSize && curr.size > options.maxBlockSize
@@ -1985,12 +2006,6 @@ try{
 				})
 				continue
 			}
-}
-catch(e){
-	console.log(curr);
-	console.log(channelData);
-	throw "whyyyy"
-}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
 			if(curr.size >= 4){
 				let errorQueue = [];
@@ -2884,7 +2899,7 @@ catch(e){
 				}*/
 				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
 				let whole_patch = [[avg,avg],[avg,avg]];
-				let wholeError = error_compare(whole_patch,chunck,0,0);
+				let wholeError = error_compare(whole_patch,chunck,curr.x,curr.y);
 
 				if(
 					wholeError === 0
@@ -2915,7 +2930,7 @@ catch(e){
 					continue
 				}
 				let dia1_patch = create_diagonal_gradient(chunck[0][0],chunck[1][1],false,2);
-				let dia1_err = error_compare(dia1_patch,chunck,0,0);
+				let dia1_err = error_compare(dia1_patch,chunck,curr.x,curr.y);
 				if(dia1_err === 0){
 					writeSymbol("diagonal_NW");
 					writeByte(chunck[0][0]);
@@ -2924,7 +2939,7 @@ catch(e){
 					continue
 				}
 				let dia2_patch = create_diagonal_gradient(chunck[1][0],chunck[0][1],true,2);
-				let dia2_err = error_compare(dia2_patch,chunck,0,0);
+				let dia2_err = error_compare(dia2_patch,chunck,curr.x,curr.y);
 				if(dia2_err === 0){
 					writeSymbol("diagonal_NE");
 					writeByte(chunck[1][0]);
@@ -2993,19 +3008,19 @@ catch(e){
 					let SE_avg = Math.round((chunck[1][0] + chunck[0][1] + chunck[1][1])/3);
 
 					let solid1_patch = [[NW_avg,NW_avg],[NW_avg,chunck[1][1]]];
-					let solid1Error = error_compare(solid1_patch,chunck,0,0);
+					let solid1Error = error_compare(solid1_patch,chunck,curr.x,curr.y);
 
 					let solid2_patch = [[NE_avg,chunck[0][1]],[NE_avg,NE_avg]];
-					let solid2Error = error_compare(solid2_patch,chunck,0,0);
+					let solid2Error = error_compare(solid2_patch,chunck,curr.x,curr.y);
 
 					let weird1_patch = [[chunck[0][0],SE_avg],[SE_avg,SE_avg]];
-					let weird1Error = error_compare(weird1_patch,chunck,0,0);
+					let weird1Error = error_compare(weird1_patch,chunck,curr.x,curr.y);
 
 					let weird2_patch = [[SW_avg,SW_avg],[chunck[1][0],SW_avg]];
-					let weird2Error = error_compare(weird2_patch,chunck,0,0);
+					let weird2Error = error_compare(weird2_patch,chunck,curr.x,curr.y);
 
 					let lossyVertical_patch = [[upper_avg,lower_avg],[upper_avg,lower_avg]];
-					let lossyVerticalError = error_compare(lossyVertical_patch,chunck,0,0);
+					let lossyVerticalError = error_compare(lossyVertical_patch,chunck,curr.x,curr.y);
 					errorQueue.push({
 						symbol: "vertical",
 						error: lossyVerticalError,
@@ -3013,7 +3028,7 @@ catch(e){
 						colours: [upper_avg,lower_avg]
 					})
 					let lossyHorizontal_patch = [[left_avg,left_avg],[right_avg,right_avg]];
-					let lossyHorizontalError = error_compare(lossyHorizontal_patch,chunck,0,0);
+					let lossyHorizontalError = error_compare(lossyHorizontal_patch,chunck,curr.x,curr.y);
 					errorQueue.push({
 						symbol: "horizontal",
 						error: lossyHorizontalError,
@@ -3059,7 +3074,7 @@ catch(e){
 					/*if(previous2x2_curr.length > 1){
 						errorQueue.push({
 							symbol: "PREVIOUS",
-							error: error_compare(chunck_previous1,chunck,0,0),
+							error: error_compare(chunck_previous1,chunck,curr.x,curr.y),
 							patch: chunck_previous1,
 							colours: []
 						})
@@ -3067,7 +3082,7 @@ catch(e){
 					if(previous2x2_curr.length > 2){
 						errorQueue.push({
 							symbol: "PREVIOUS2",
-							error: error_compare(chunck_previous2,chunck,0,0),
+							error: error_compare(chunck_previous2,chunck,curr.x,curr.y),
 							patch: chunck_previous2,
 							colours: []
 						})
@@ -3267,6 +3282,11 @@ catch(e){
 		
 		bitBuffer = bitBuffer.concat(middleBuffer);
 
+		if(c_options.name === "alpha" && frequencyTable[0] && options.fullTransparancyOptimization){
+			hasAlphaMap = true;
+			alphaMap = currentEncode.map(row => row.map(val => val === 0))
+		}
+
 		return bitBuffer
 	}
 
@@ -3445,6 +3465,9 @@ catch(e){
 		}
 	}
 	else if(options.target_pixelFormat === "indexed"){
+		if(c_index.length === 1){//can be encoded as a whole block, no need to limit block size
+			options.maxBlockSize = encoding_size
+		}
 		const luma_compare = (a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114;
 		if(options.multiPassIndexed && options.quantizer === 0){
 			c_index.sort(luma_compare);
@@ -3498,31 +3521,14 @@ catch(e){
 				c_index: c_index
 			}))
 		}
-
-/*
-	let red_bin = [];
-	let green_bin = [];
-	let blue_bin = [];
-	list.forEach(colour => {
-		if(colour[0] > colour[1] && colour[0] > colour[2]){
-			red_bin.push(colour)
-		}
-		else if(colour[1] > colour[2]){
-			green_bin.push(colour)
-		}
-		else{
-			blue_bin.push(colour)
-		}
-	});
-	console.log(red_bin,green_bin,blue_bin);
-
-	return red_bin.sort(luma_compare).concat(green_bin.sort(luma_compare)).concat(blue_bin.sort(luma_compare))
-*/
 		while(bitBuffer.length > 7){
 			encodedData.push(dePlex(bitBuffer.splice(0,8)))
 		}
 	}
 	else if(options.target_pixelFormat === "indexeda"){
+		if(c_index.length === 1){//can be encoded as a whole block, no need to limit block size
+			options.maxBlockSize = encoding_size
+		}
 		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
 			bitDepth: 8,
 			name: "indexeda",
@@ -4652,7 +4658,7 @@ function decoder(hohData,options){
 						write2x2(curr,...rePlex(instruction,4))
 						continue
 					}
-					if(instruction === "PREVIOUS"){
+					/*if(instruction === "PREVIOUS"){
 						let chunck_previous = get_chunck(previous2x2_curr[previous2x2_curr.length - 2].x,previous2x2_curr[previous2x2_curr.length - 2].y,2);
 						write2x2(curr,chunck_previous[0][0],chunck_previous[1][0],chunck_previous[1][1],chunck_previous[0][1])
 					}
@@ -4660,7 +4666,7 @@ function decoder(hohData,options){
 						let chunck_previous = get_chunck(previous2x2_curr[previous2x2_curr.length - 3].x,previous2x2_curr[previous2x2_curr.length - 3].y,2);
 						write2x2(curr,chunck_previous[0][0],chunck_previous[1][0],chunck_previous[1][1],chunck_previous[0][1])
 					}
-					else if(instruction === "pixels"){
+					else */if(instruction === "pixels"){
 						write2x2(curr,readColour(),readColour(),readColour(),readColour())
 					}
 					else if(instruction === "whole"){
