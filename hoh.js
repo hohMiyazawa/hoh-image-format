@@ -2761,7 +2761,7 @@ function encoder(imageData,options){
 				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];
 
 
-				errorQueue.sort((a,b) => a.error - b.error);
+				errorQueue.sort((a,b) => a.error - b.error || a.colours.length - b.colours.length);
 				if(errorQueue[0].error <= localQuantizer){
 					if(
 						curr.size === 4
@@ -3199,7 +3199,8 @@ function encoder(imageData,options){
 		let white_stat = new FrequencyTable([1,1]);
 
 		let pixelTrace = [];
-		let previousWasPixel = false;
+		let previousWas = false;
+		let previousWas_large = false;
 
 		aritmetic_queue.forEach(waiting => {
 			try{
@@ -3244,6 +3245,9 @@ function encoder(imageData,options){
 						else if(pixelTrace.length && previousWas && previousWas !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
+						else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
+							localProbability[pixelTrace[0]] = 0
+						}
 						
 						enc.write(
 							new FrequencyTable(localProbability),
@@ -3258,6 +3262,7 @@ function encoder(imageData,options){
 				else if(waiting.size === "large"){
 					pixelTrace = [];
 					previousWas = false;
+					previousWas_large = waiting.symbol;
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
 
 					if(DEBUG_large_f.get(forigeg_large) > 128){
@@ -3273,6 +3278,7 @@ function encoder(imageData,options){
 				}
 				else{
 					pixelTrace = [];
+					previousWas_large = false;
 					if(table_ceiling === 2){
 						if(DEBUG_small_f.get(forigeg_small) > 32){
 							enc.write(predictionGrid_small[forigeg_small],waiting.symbol)
@@ -3925,6 +3931,7 @@ function decoder(hohData,options){
 
 			let pixelTrace = [];
 			let previousWas = false;
+			let previousWas_large = false;
 
 			let readLargeSymbol = function(){
 				previousWas = false;
@@ -3939,10 +3946,12 @@ function decoder(hohData,options){
 				DEBUG_large_f.increment(symbol);
 				predictionGrid_large[forigeg_large].increment(symbol);
 				forigeg_large = symbol;
-				return largeSymbolTable[symbol]
+				previousWas_large = largeSymbolTable[symbol];
+				return previousWas_large
 			}
 
 			let readSmallSymbol = function(){
+				previousWas_large = false;
 				pixelTrace = [];
 				let symbol;
 				if(DEBUG_small_f.get(forigeg_small) > 64){
@@ -3955,7 +3964,7 @@ function decoder(hohData,options){
 				predictionGrid_small[forigeg_small].increment(symbol);
 				forigeg_small = symbol;
 				previousWas = smallSymbolTable[symbol];
-				return smallSymbolTable[symbol]
+				return previousWas
 			};
 
 			if(table_ceiling === 2){
@@ -4001,6 +4010,9 @@ function decoder(hohData,options){
 					}
 				}
 				else if(pixelTrace.length && previousWas && previousWas !== "whole"){
+					localProbability[pixelTrace[0]] = 0
+				}
+				else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 					localProbability[pixelTrace[0]] = 0
 				}
 
