@@ -3087,8 +3087,8 @@ function encoder(imageData,options){
 							colours: []
 						})
 					}*/
-					errorQueue.sort((a,b) => a.error - b.error);
-					if(errorQueue[0].error <= options.quantizer){
+					errorQueue.sort((a,b) => a.error - b.error || a.colours.length - b.colours.length);
+					if(errorQueue[0].error <= c_options.quantizer){
 						writeSymbol(errorQueue[0].symbol);
 						errorQueue[0].colours.forEach(colour => {
 							writeByte(colour);
@@ -3198,6 +3198,9 @@ function encoder(imageData,options){
 		let black_stat = new FrequencyTable([1,1]);
 		let white_stat = new FrequencyTable([1,1]);
 
+		let pixelTrace = [];
+		let previousWasPixel = false;
+
 		aritmetic_queue.forEach(waiting => {
 			try{
 				if(isFinite(waiting)){
@@ -3218,17 +3221,43 @@ function encoder(imageData,options){
 							encodedInteger += table_ceiling
 						}
 
-						let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
+						let localProbability = absolutes.map((val,index) => {
 							return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
-						}))
+						})
+						if(previousWas === "pixels"){
+							if(pixelTrace.length === 3){
+								if(pixelTrace[0] === pixelTrace[1]){
+									localProbability[pixelTrace[2]] = 0;
+									localProbability[pixelTrace[0]] = 0
+								}
+								else if(pixelTrace[1] === pixelTrace[2]){
+									localProbability[pixelTrace[2]] = 0;
+									localProbability[pixelTrace[0]] = 0
+								}
+							}
+							else if(pixelTrace.length === 2){
+								if(pixelTrace[0] === pixelTrace[1]){
+									localProbability[pixelTrace[0]] = 0
+								}
+							}
+						}
+						else if(pixelTrace.length && previousWas && previousWas !== "whole"){
+							localProbability[pixelTrace[0]] = 0
+						}
 						
-						enc.write(DEBUG_integer_f,waiting);
+						enc.write(
+							new FrequencyTable(localProbability),
+							waiting
+						);
 						forige = waiting;
 						deltas[encodedInteger]++;
-						absolutes[waiting]++
+						absolutes[waiting]++;
+						pixelTrace.push(waiting);
 					}
 				}
 				else if(waiting.size === "large"){
+					pixelTrace = [];
+					previousWas = false;
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
 
 					if(DEBUG_large_f.get(forigeg_large) > 128){
@@ -3243,6 +3272,7 @@ function encoder(imageData,options){
 					DEBUG_large_f.increment(symbol);
 				}
 				else{
+					pixelTrace = [];
 					if(table_ceiling === 2){
 						if(DEBUG_small_f.get(forigeg_small) > 32){
 							enc.write(predictionGrid_small[forigeg_small],waiting.symbol)
@@ -3255,6 +3285,7 @@ function encoder(imageData,options){
 						DEBUG_small_f.increment(waiting.symbol);
 					}
 					else{
+						previousWas = waiting.symbol;
 						let symbol = smallSymbolTable.indexOf(waiting.symbol);
 						if(DEBUG_small_f.get(forigeg_small) > 64){
 							enc.write(predictionGrid_small[forigeg_small],symbol)
@@ -3890,9 +3921,14 @@ function decoder(hohData,options){
 				close: function(){}
 			}
 
-			let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader)
+			let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader);
+
+			let pixelTrace = [];
+			let previousWas = false;
 
 			let readLargeSymbol = function(){
+				previousWas = false;
+				pixelTrace = [];
 				let symbol;
 				if(DEBUG_large_f.get(forigeg_large) > 128){
 					symbol = dec.read(predictionGrid_large[forigeg_large])
@@ -3907,6 +3943,7 @@ function decoder(hohData,options){
 			}
 
 			let readSmallSymbol = function(){
+				pixelTrace = [];
 				let symbol;
 				if(DEBUG_small_f.get(forigeg_small) > 64){
 					symbol = dec.read(predictionGrid_small[forigeg_small])
@@ -3917,6 +3954,7 @@ function decoder(hohData,options){
 				DEBUG_small_f.increment(symbol);
 				predictionGrid_small[forigeg_small].increment(symbol);
 				forigeg_small = symbol;
+				previousWas = smallSymbolTable[symbol];
 				return smallSymbolTable[symbol]
 			};
 
@@ -3942,15 +3980,36 @@ function decoder(hohData,options){
 
 			let readColour = function(){
 				
-				let DEBUG_integer_f = new FrequencyTable(absolutes.map((val,index) => {
+				let localProbability = absolutes.map((val,index) => {
 					return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
-				}))
+				})
+				if(previousWas === "pixels"){
+					if(pixelTrace.length === 3){
+						if(pixelTrace[0] === pixelTrace[1]){
+							localProbability[pixelTrace[2]] = 0;
+							localProbability[pixelTrace[0]] = 0
+						}
+						else if(pixelTrace[1] === pixelTrace[2]){
+							localProbability[pixelTrace[2]] = 0;
+							localProbability[pixelTrace[0]] = 0
+						}
+					}
+					else if(pixelTrace.length === 2){
+						if(pixelTrace[0] === pixelTrace[1]){
+							localProbability[pixelTrace[0]] = 0
+						}
+					}
+				}
+				else if(pixelTrace.length && previousWas && previousWas !== "whole"){
+					localProbability[pixelTrace[0]] = 0
+				}
 
-				let symbol = dec.read(DEBUG_integer_f);
+				let symbol = dec.read(new FrequencyTable(localProbability));
 				let encodedInteger = (symbol - forige + table_ceiling) % table_ceiling;
 				forige = symbol;
 				deltas[encodedInteger]++;
-				absolutes[symbol]++
+				absolutes[symbol]++;
+				pixelTrace.push(symbol)
 				return symbol
 			}
 
