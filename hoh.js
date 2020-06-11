@@ -3201,6 +3201,7 @@ function encoder(imageData,options){
 		let pixelTrace = [];
 		let previousWas = false;
 		let previousWas_large = false;
+		let toot = 0;
 
 		aritmetic_queue.forEach(waiting => {
 			try{
@@ -3277,7 +3278,6 @@ function encoder(imageData,options){
 					DEBUG_large_f.increment(symbol);
 				}
 				else{
-					pixelTrace = [];
 					previousWas_large = false;
 					if(table_ceiling === 2){
 						if(DEBUG_small_f.get(forigeg_small) > 32){
@@ -3286,11 +3286,18 @@ function encoder(imageData,options){
 						else{
 							enc.write(DEBUG_small_f,waiting.symbol)
 						}
+						if(pixelTrace.length === 3){
+							if(pixelTrace[0] === pixelTrace[1] && pixelTrace[0] === pixelTrace[2]){
+								toot++
+							}
+						}
 						predictionGrid_small[forigeg_small].increment(waiting.symbol);
 						forigeg_small = waiting.symbol;
 						DEBUG_small_f.increment(waiting.symbol);
+						pixelTrace.push(waiting.symbol)
 					}
 					else{
+						pixelTrace = [];
 						previousWas = waiting.symbol;
 						let symbol = smallSymbolTable.indexOf(waiting.symbol);
 						if(DEBUG_small_f.get(forigeg_small) > 64){
@@ -3313,6 +3320,7 @@ function encoder(imageData,options){
 		});
 		
 		enc.finish();
+		console.log("toot",toot)
 		//console.log(DEBUG_integer_f)
 
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
