@@ -729,6 +729,10 @@ function rgb_to_yiq26(imageData){
 	return outBuffer
 }
 
+function yiq26_min_I_from_Y(Y){
+	return Math.max(253 - Y*4,1)
+}
+
 function yiq26a_to_rgba(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i += 4){
@@ -1477,6 +1481,8 @@ function encoder(imageData,options){
 	let hasAlphaMap = false;
 	let alphaMap;
 
+	let lumaMap;
+
 	encodeChannel = function(channelData,c_options){
 		const CHANNEL_LENGTH = c_options.bitDepth;
 		const CHANNEL_POWER = Math.pow(2,CHANNEL_LENGTH);
@@ -1513,6 +1519,10 @@ function encoder(imageData,options){
 		let frequencyTable;
 		let delta_data;
 		let range_data;
+		let inverseTranslation;
+		let translationTable = new Array(CHANNEL_POWER);
+		let snapUpTable = new Array(CHANNEL_POWER);
+		let snapDownTable = new Array(CHANNEL_POWER);
 		if(CHANNEL_LENGTH > 1){
 //tables
 			frequencyTable = new Array(CHANNEL_POWER).fill(0);
@@ -1564,9 +1574,9 @@ function encoder(imageData,options){
 			range_data = rePlex(shift_counter/2,CHANNEL_LENGTH - 1).concat(range_data);
 			console.log(c_options.name,"range delta table size",range_data.length);
 
-			let translationTable = new Array(CHANNEL_POWER);
 			delta = 0;
 			for(let i=0;i<CHANNEL_POWER;i++){
+				snapUpTable[i] = delta;
 				if(
 					frequencyTable[i]
 				){
@@ -1583,6 +1593,7 @@ function encoder(imageData,options){
 					channelData[i][j] = translationTable[channelData[i][j]]
 				}
 			}
+			inverseTranslation = Object.keys(translationTable).map(key => parseInt(key))
 		}
 //end tables
 
@@ -1770,8 +1781,13 @@ function encoder(imageData,options){
 		let largeSymbolFrequency = {};
 		largeSymbolTable.forEach(word => largeSymbolFrequency[word] = 0);
 
-		let writeSymbol = function(symbol){
-			aritmetic_queue.push({size: "small",symbol: symbol});
+		let writeSymbol = function(symbol,curr){
+			if(symbol === "pixels"){
+				aritmetic_queue.push({size: "small",symbol: "pixels",x: curr.x,y: curr.y})
+			}
+			else{
+				aritmetic_queue.push({size: "small",symbol: symbol})
+			}
 			smallSymbolFrequency[symbol]++
 		}
 		if(table_ceiling === 2){
@@ -2776,39 +2792,33 @@ function encoder(imageData,options){
 							}
 						}
 						if(nextPassed){
-							try{
-								writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-								if(table_ceiling === 2){
-									if(errorQueue[0].colours.length){
-										writeByte(errorQueue[0].colours[0])
-									}
+							writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
+							if(table_ceiling === 2){
+								if(errorQueue[0].colours.length){
+									writeByte(errorQueue[0].colours[0])
 								}
-								else{
-									errorQueue[0].colours.forEach(colour => {
-										writeByte(colour);
-									})
-								}
-								for(let i=0;i < curr.size && (i + curr.x) < width;i++){
-									for(let j=0;j < curr.size && (j + curr.y) < height;j++){
-										currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
-									}
-								}
-								previous2x2_curr.push({
-									x: curr.x + 2,
-									y: curr.y + curr.size - 2,
-									size: 2
+							}
+							else{
+								errorQueue[0].colours.forEach(colour => {
+									writeByte(colour);
 								})
-								previous2x2_curr.push({
-									x: curr.x,
-									y: curr.y + curr.size - 2,
-									size: 2
-								});
-								continue
 							}
-							catch(e){
-								console.log(errorQueue[0]);
-								throw "why???"
+							for(let i=0;i < curr.size && (i + curr.x) < width;i++){
+								for(let j=0;j < curr.size && (j + curr.y) < height;j++){
+									currentEncode[i + curr.x][j + curr.y] = errorQueue[0].patch[i][j]
+								}
 							}
+							previous2x2_curr.push({
+								x: curr.x + 2,
+								y: curr.y + curr.size - 2,
+								size: 2
+							})
+							previous2x2_curr.push({
+								x: curr.x,
+								y: curr.y + curr.size - 2,
+								size: 2
+							});
+							continue
 						}
 					}
 				}
@@ -3072,7 +3082,8 @@ function encoder(imageData,options){
 						continue
 					}
 				}
-				writeSymbol("pixels");
+				writeSymbol("pixels",curr);
+				
 				writeByte(chunck[0][0]);
 				writeByte(chunck[1][0]);
 				writeByte(chunck[1][1]);
@@ -3213,9 +3224,9 @@ function encoder(imageData,options){
 						}
 
 						let localProbability = absolutes.map((val,index) => {
-							return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
+							return Math.round(Math.sqrt(val)) * deltas[(index - forige + table_ceiling) % table_ceiling]
 						})
-						if(previousWas === "pixels"){
+						if(previousWas.symbol === "pixels"){
 							if(pixelTrace.length === 3){
 								if(pixelTrace[0] === pixelTrace[1]){
 									localProbability[pixelTrace[2]] = 0;
@@ -3232,7 +3243,7 @@ function encoder(imageData,options){
 								}
 							}
 						}
-						else if(pixelTrace.length && previousWas && previousWas !== "whole"){
+						else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
 						else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
@@ -3292,7 +3303,7 @@ function encoder(imageData,options){
 					}
 					else{
 						pixelTrace = [];
-						previousWas = waiting.symbol;
+						previousWas = waiting;
 						let symbol = smallSymbolTable.indexOf(waiting.symbol);
 						if(DEBUG_small_f.get(forigeg_small) > 64){
 							enc.write(predictionGrid_small[forigeg_small],symbol)
@@ -4043,7 +4054,7 @@ function decoder(hohData,options){
 			let readColour = function(){
 				
 				let localProbability = absolutes.map((val,index) => {
-					return Math.min(val,256) * deltas[(index - forige + table_ceiling) % table_ceiling]
+					return Math.round(Math.sqrt(val)) * deltas[(index - forige + table_ceiling) % table_ceiling]
 				})
 				if(previousWas === "pixels"){
 					if(pixelTrace.length === 3){
