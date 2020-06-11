@@ -1760,8 +1760,10 @@ function encoder(imageData,options){
 			smallSymbolFrequency[symbol]++
 		}
 		if(table_ceiling === 2){
+			smallSymbolFrequency = new Array(16).fill(0)
 			writeSymbol = function(symbol){
 				aritmetic_queue.push({size: "small",symbol: symbol});
+				smallSymbolFrequency[symbol]++
 			}
 		}
 		let writeLargeSymbol = function(symbol,is4x4){
@@ -3107,8 +3109,18 @@ function encoder(imageData,options){
 		let predictionGrid_small = [];
 		if(table_ceiling === 2){
 			DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
+			/*DEBUG_small_f.set(1,0);
+			DEBUG_small_f.set(4,0);
+			DEBUG_small_f.set(5,0);
+			DEBUG_small_f.set(10,0);
+			DEBUG_small_f.set(12,0);*/
 			for(let i=0;i<16;i++){
-				predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)))
+				predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)));
+				/*predictionGrid_small[predictionGrid_small.length - 1].set(1,0);
+				predictionGrid_small[predictionGrid_small.length - 1].set(4,0);
+				predictionGrid_small[predictionGrid_small.length - 1].set(5,0);
+				predictionGrid_small[predictionGrid_small.length - 1].set(10,0);
+				predictionGrid_small[predictionGrid_small.length - 1].set(12,0);*/
 			}
 		}
 		else{
@@ -3117,11 +3129,26 @@ function encoder(imageData,options){
 				predictionGrid_small.push(new FrequencyTable(new Array(smallSymbolTable.length).fill(1)))
 			}
 		}
-		let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
+
+		let defaultLargeMap = largeSymbolTable.map(ele => +!!largeSymbolFrequency[ele]);
+		if(
+			defaultLargeMap.filter(e => e === 0).length >= 6
+			&& largeSymbolTable.map(ele => largeSymbolFrequency[ele]).reduce((acc,val) => acc + val,0) > 128
+		){
+			bitBuffer.push(1);
+			bitBuffer.push(...defaultLargeMap);
+		}
+		else{
+			bitBuffer.push(0);
+			defaultLargeMap = new Array(largeSymbolTable.length).fill(1)
+		}
+
+		let DEBUG_large_f = new FrequencyTable(defaultLargeMap);
+
 		let forigeg_large = 0;
 		let predictionGrid_large = [];
 		for(let i=0;i<largeSymbolTable.length;i++){
-			predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
+			predictionGrid_large.push(new FrequencyTable(defaultLargeMap));
 		}
 
 		//let DEBUG_integer_f = new FrequencyTable(new Array(table_ceiling).fill(1));
@@ -3874,11 +3901,24 @@ function decoder(hohData,options){
 					predictionGrid_small.push(new FrequencyTable(new Array(smallSymbolTable.length).fill(1)))
 				}
 			}
-			let DEBUG_large_f = new FrequencyTable(new Array(largeSymbolTable.length).fill(1));
+
+			let defaultLargeMap = [];
+			if(
+				readBit()
+			){
+				for(let i=0;i<largeSymbolTable.length;i++){
+					defaultLargeMap.push(readBit())
+				}
+			}
+			else{
+				defaultLargeMap = new Array(largeSymbolTable.length).fill(1)
+			}
+
+			let DEBUG_large_f = new FrequencyTable(defaultLargeMap);
 			let forigeg_large = 0;
 			let predictionGrid_large = [];
 			for(let i=0;i<largeSymbolTable.length;i++){
-				predictionGrid_large.push(new FrequencyTable(new Array(largeSymbolTable.length).fill(1)))
+				predictionGrid_large.push(new FrequencyTable(defaultLargeMap))
 			}
 
 
