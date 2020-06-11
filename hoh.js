@@ -916,24 +916,6 @@ function primitive_bi_huffman(states){
 	return [124].concat(base_freq).concat(base_freq.slice(0,base_freq.length - 1).reverse())
 }
 
-function find_average(chunck,ceiling){
-	let sum = 0;
-	for(let i=0;i < chunck.length;i++){
-		for(let j=0;j < chunck[i].length;j++){
-			if(Math.abs(chunck[i][j] - ceiling) < Math.abs(chunck[i][j])){
-				sum += chunck[i][j] - ceiling
-			}
-			else if(Math.abs(chunck[i][j] + ceiling) < Math.abs(chunck[i][j])){
-				sum += chunck[i][j] + ceiling
-			}
-			else{
-				sum += chunck[i][j]
-			}
-		}
-	}
-	return Math.round(sum/(chunck.length * chunck[0].length))
-}
-
 function create_uniform(colour,size){
 	let data = [];
 	for(let i=0;i<size;i++){
@@ -1465,7 +1447,7 @@ function encoder(imageData,options){
 	bitBuffer.push(...encodeVarint(0,BYTE_LENGTH));//still image
 //end write header
 
-	console.log("target",options.target_pixelFormat);
+	console.log("target",options.target_pixelFormat,"input",options.pixelFormat);
 	if(options.pixelFormat === "rgba"){
 		if(options.target_pixelFormat === "yiq26a"){
 			imageData = rgba_to_yiq26a(imageData)
@@ -1474,7 +1456,7 @@ function encoder(imageData,options){
 			imageData = rgba_to_ycocga(imageData)
 		}
 	}
-	if(options.pixelFormat === "rgb"){
+	else if(options.pixelFormat === "rgb"){
 		if(options.target_pixelFormat === "yiq26"){
 			imageData = rgb_to_yiq26(imageData)
 		}
@@ -1616,6 +1598,21 @@ function encoder(imageData,options){
 			}
 		}
 
+		let find_average = function(chunck,offx,offy){
+			let sumAlpha = 0;
+			let sum = 0;
+			for(let i=0;i < chunck.length;i++){
+				for(let j=0;j < chunck[i].length;j++){
+					if(offx + i < width && offy + j < height){
+						sum += chunck[i][j]
+					}
+					else{
+						sumAlpha++
+					}
+				}
+			}
+			return Math.round(sum/(chunck.length * chunck[0].length - sumAlpha)) || 0
+		}
 		let error_compare = function(chunck1,chunck2,offx,offy){
 			let sumError = 0;
 			for(let i=0;i<chunck1.length;i++){
@@ -1665,6 +1662,24 @@ function encoder(imageData,options){
 						}
 					}
 					return 0
+				}
+				find_average = function(chunck,offx,offy){
+					let sumAlpha = 0;
+					let sum = 0;
+					for(let i=0;i < chunck.length;i++){
+						for(let j=0;j < chunck[i].length;j++){
+							if(
+								offx + i < width && offy + j < height
+								&& (!alphaMap[i + offx][j + offy])
+							){
+								sum += chunck[i][j]
+							}
+							else{
+								sumAlpha++
+							}
+						}
+					}
+					return Math.round(sum/(chunck.length * chunck[0].length - sumAlpha)) || 0
 				}
 			}
 			else{
@@ -1972,7 +1987,7 @@ function encoder(imageData,options){
 				let localQuantizer = 100*c_options.quantizer/(curr.size);
 				//let localQuantizer = options.quantizer;
 
-				let average = find_average(chunck);
+				let average = find_average(chunck,curr.x,curr.y);
 				let avg_error = error_compare(chunck,create_uniform(average,curr.size),curr.x,curr.y);
 				
 				errorQueue.push({
@@ -2857,7 +2872,7 @@ function encoder(imageData,options){
 						continue;
 					}
 				}*/
-				let avg = Math.round((chunck[0][0] + chunck[1][0] + chunck[0][1] + chunck[1][1])/4);
+				let avg = find_average(chunck,curr.x,curr.y);
 				let whole_patch = [[avg,avg],[avg,avg]];
 				let wholeError = error_compare(whole_patch,chunck,curr.x,curr.y);
 
@@ -3109,18 +3124,8 @@ function encoder(imageData,options){
 		let predictionGrid_small = [];
 		if(table_ceiling === 2){
 			DEBUG_small_f = new FrequencyTable(new Array(16).fill(1));
-			/*DEBUG_small_f.set(1,0);
-			DEBUG_small_f.set(4,0);
-			DEBUG_small_f.set(5,0);
-			DEBUG_small_f.set(10,0);
-			DEBUG_small_f.set(12,0);*/
 			for(let i=0;i<16;i++){
 				predictionGrid_small.push(new FrequencyTable(new Array(16).fill(1)));
-				/*predictionGrid_small[predictionGrid_small.length - 1].set(1,0);
-				predictionGrid_small[predictionGrid_small.length - 1].set(4,0);
-				predictionGrid_small[predictionGrid_small.length - 1].set(5,0);
-				predictionGrid_small[predictionGrid_small.length - 1].set(10,0);
-				predictionGrid_small[predictionGrid_small.length - 1].set(12,0);*/
 			}
 		}
 		else{
@@ -3233,7 +3238,6 @@ function encoder(imageData,options){
 						else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
-						
 						enc.write(
 							new FrequencyTable(localProbability),
 							waiting
@@ -3249,7 +3253,6 @@ function encoder(imageData,options){
 					previousWas = false;
 					previousWas_large = waiting.symbol;
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
-
 					if(DEBUG_large_f.get(forigeg_large) > 128){
 						enc.write(predictionGrid_large[forigeg_large],symbol)
 					}
@@ -3305,7 +3308,7 @@ function encoder(imageData,options){
 				}
 			}
 			catch(e){
-				console.log(e,DEBUG_large_f,waiting,largeSymbolTable.indexOf(waiting.symbol));
+				console.log(e,DEBUG_large_f,waiting,previousWas,previousWas_large,pixelTrace);
 				throw "up"
 			}
 		});
@@ -3454,6 +3457,32 @@ function encoder(imageData,options){
 		while(bitBuffer.length > 7){
 			encodedData.push(dePlex(bitBuffer.splice(0,8)))
 		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
+			bitDepth: 8,
+			name: "g",
+			quantizer: options.quantizer
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[0],{
+			bitDepth: 8,
+			name: "r",
+			quantizer: options.quantizer
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+		bitBuffer = bitBuffer.concat(encodeChannel(channels[2],{
+			bitDepth: 8,
+			name: "b",
+			quantizer: options.quantizer
+		}))
+		while(bitBuffer.length > 7){
+			encodedData.push(dePlex(bitBuffer.splice(0,8)))
+		}
+	}
+	else if(options.target_pixelFormat === "rgb"){
 		bitBuffer = bitBuffer.concat(encodeChannel(channels[1],{
 			bitDepth: 8,
 			name: "g",
