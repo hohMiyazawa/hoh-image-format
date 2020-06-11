@@ -1999,9 +1999,9 @@ function encoder(imageData,options){
 				continue
 			}
 			let chunck = get_chunck(curr.x,curr.y,curr.size);
+			let localQuantizer = 100*c_options.quantizer/(curr.size);
 			if(curr.size >= 4){
 				let errorQueue = [];
-				let localQuantizer = 100*c_options.quantizer/(curr.size);
 				//let localQuantizer = options.quantizer;
 
 				let average = find_average(chunck,curr.x,curr.y);
@@ -3074,7 +3074,7 @@ function encoder(imageData,options){
 						})
 					}*/
 					errorQueue.sort((a,b) => a.error - b.error || a.colours.length - b.colours.length);
-					if(errorQueue[0].error <= c_options.quantizer){
+					if(errorQueue[0].error <= localQuantizer){
 						writeSymbol(errorQueue[0].symbol);
 						errorQueue[0].colours.forEach(colour => {
 							writeByte(colour);
