@@ -1798,13 +1798,8 @@ function encoder(imageData,options){
 				smallSymbolFrequency[symbol]++
 			}
 		}
-		let writeLargeSymbol = function(symbol,is4x4){
-			if(is4x4){
-				aritmetic_queue.push({size: "large",symbol: symbol,is4x4: true});
-			}
-			else{
-				aritmetic_queue.push({size: "large",symbol: symbol,is4x4: false});
-			}
+		let writeLargeSymbol = function(symbol){
+			aritmetic_queue.push({size: "large",symbol: symbol});
 			largeSymbolFrequency[symbol]++
 		}
 		let writeByte = function(integer){
@@ -2793,16 +2788,22 @@ function encoder(imageData,options){
 							}
 						}
 						if(nextPassed){
-							writeLargeSymbol(errorQueue[0].symbol,curr.size === 4);
-							if(table_ceiling === 2){
-								if(errorQueue[0].colours.length){
-									writeByte(errorQueue[0].colours[0])
-								}
+							if(errorQueue[0].colours.length === 2 && errorQueue[0].colours[0] === errorQueue[0].colours[1]){
+								writeLargeSymbol("whole");
+								writeByte(errorQueue[0].colours[0])
 							}
 							else{
-								errorQueue[0].colours.forEach(colour => {
-									writeByte(colour);
-								})
+								writeLargeSymbol(errorQueue[0].symbol);
+								if(table_ceiling === 2){
+									if(errorQueue[0].colours.length){
+										writeByte(errorQueue[0].colours[0])
+									}
+								}
+								else{
+									errorQueue[0].colours.forEach(colour => {
+										writeByte(colour);
+									})
+								}
 							}
 							for(let i=0;i < curr.size && (i + curr.x) < width;i++){
 								for(let j=0;j < curr.size && (j + curr.y) < height;j++){
@@ -3331,6 +3332,7 @@ function encoder(imageData,options){
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
 		
 		bitBuffer = bitBuffer.concat(middleBuffer);
+		console.log(c_options.name,"data buffer",middleBuffer.length);
 
 		if(c_options.name === "alpha" && frequencyTable[0] && options.fullTransparancyOptimization){
 			hasAlphaMap = true;
