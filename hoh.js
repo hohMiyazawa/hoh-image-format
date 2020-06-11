@@ -2761,7 +2761,7 @@ function encoder(imageData,options){
 				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];
 
 
-				errorQueue.sort((a,b) => a.error - b.error || a.colours.length - b.colours.length);
+				errorQueue.sort((a,b) => a.error - b.error || (b.symbol === "whole") - (a.symbol === "whole") || a.colours.length - b.colours.length);
 				if(errorQueue[0].error <= localQuantizer){
 					if(
 						curr.size === 4
