@@ -415,36 +415,6 @@ class ArithmeticDecoder extends Coder {
   }
 }
 
-let currentIndex = 0;
-
-let testreader = {
-	read: function(){
-		if(currentIndex < testbuffer.length){
-			console.log(testbuffer[currentIndex])
-			return testbuffer[currentIndex++];
-		}
-		else{
-			return -1
-		}
-	},
-	close: function(){}
-}
-
-//let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader)
-
-/*class Arithmetic_coder{
-	constructor(){
-		this.upper = [1];
-		this.lower = [0];
-		this.coded = [];
-	}
-	writeSymbol(symbol,model,depth){
-	}
-	code(){
-		return this.coded.slice(1)
-	}
-}*/
-
 
 function rePlex(integer,base){
 	if(!base){
@@ -1775,18 +1745,6 @@ function encoder(imageData,options){
 				}
 				data.push(col)
 			}
-			/*if(data.flat().filter(a => a === undefined).length){
-				console.log("data",data);
-				for(let i=0;i<data.length;i++){
-					for(let j=0;j<data.length;j++){
-						if(data[i][j] === undefined){
-							console.log(i,j,channelData[i][j])
-							throw "data"
-						}
-					}
-				}
-				throw "data"
-			}*/
 			return data
 		}
 
@@ -3201,7 +3159,6 @@ function encoder(imageData,options){
 		let pixelTrace = [];
 		let previousWas = false;
 		let previousWas_large = false;
-		let toot = 0;
 
 		aritmetic_queue.forEach(waiting => {
 			try{
@@ -3280,17 +3237,24 @@ function encoder(imageData,options){
 				else{
 					previousWas_large = false;
 					if(table_ceiling === 2){
+						let teamo;
 						if(DEBUG_small_f.get(forigeg_small) > 32){
-							enc.write(predictionGrid_small[forigeg_small],waiting.symbol)
+							teamo = predictionGrid_small[forigeg_small]
 						}
 						else{
-							enc.write(DEBUG_small_f,waiting.symbol)
+							teamo = DEBUG_small_f
 						}
 						if(pixelTrace.length === 3){
-							if(pixelTrace[0] === pixelTrace[1] && pixelTrace[0] === pixelTrace[2]){
-								toot++
+							if(pixelTrace[0] === 0 && pixelTrace[1] === 0 && pixelTrace[2] === 0){
+								teamo = new FrequencyTable(teamo);
+								teamo.set(0,0)
+							}
+							else if(pixelTrace[0] === 15 && pixelTrace[1] === 15 && pixelTrace[2] === 15){
+								teamo = new FrequencyTable(teamo);
+								teamo.set(15,0)
 							}
 						}
+						enc.write(teamo,waiting.symbol)
 						predictionGrid_small[forigeg_small].increment(waiting.symbol);
 						forigeg_small = waiting.symbol;
 						DEBUG_small_f.increment(waiting.symbol);
@@ -3320,7 +3284,6 @@ function encoder(imageData,options){
 		});
 		
 		enc.finish();
-		console.log("toot",toot)
 		//console.log(DEBUG_integer_f)
 
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
@@ -3977,16 +3940,29 @@ function decoder(hohData,options){
 
 			if(table_ceiling === 2){
 				readSmallSymbol = function(){
-					let symbol;
+					let teamo;
 					if(DEBUG_small_f.get(forigeg_small) > 32){
-						symbol = dec.read(predictionGrid_small[forigeg_small])
+						teamo = predictionGrid_small[forigeg_small]
 					}
 					else{
-						symbol = dec.read(DEBUG_small_f)
+						teamo = DEBUG_small_f
 					}
+					if(pixelTrace.length === 3){
+						if(pixelTrace[0] === 0 && pixelTrace[1] === 0 && pixelTrace[2] === 0){
+							teamo = new FrequencyTable(teamo);
+							teamo.set(0,0)
+						}
+						else if(pixelTrace[0] === 15 && pixelTrace[1] === 15 && pixelTrace[2] === 15){
+							teamo = new FrequencyTable(teamo);
+							teamo.set(15,0)
+						}
+					}
+
+					let symbol = dec.read(teamo)
 					DEBUG_small_f.increment(symbol);
 					predictionGrid_small[forigeg_small].increment(symbol);
 					forigeg_small = symbol;
+					pixelTrace.push(symbol)
 					return symbol
 				}
 			}
