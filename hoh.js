@@ -1614,7 +1614,7 @@ function encoder(imageData,options){
 			let sum = 0;
 			for(let i=0;i < chunck.length;i++){
 				for(let j=0;j < chunck[i].length;j++){
-					if(offx + i < width && offy + j < height){
+					if((offx + i) < width && (offy + j) < height){
 						sum += chunck[i][j]
 					}
 					else{
@@ -1624,6 +1624,7 @@ function encoder(imageData,options){
 			}
 			return Math.round(sum/(chunck.length * chunck[0].length - sumAlpha)) || 0
 		}
+
 		let error_compare = function(chunck1,chunck2,offx,offy){
 			let sumError = 0;
 			for(let i=0;i<chunck1.length;i++){
@@ -2038,25 +2039,25 @@ function encoder(imageData,options){
 				}
 				else{
 					mArr = [
-						find_average(get_chunck(curr.x,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y,curr.size/4)),
+						find_average(get_chunck(curr.x,curr.y,curr.size/4),curr.x,curr.y),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y,curr.size/4),curr.x + curr.size/4,curr.y),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y,curr.size/4),curr.x + 2*curr.size/4,curr.y),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y,curr.size/4),curr.x + 3*curr.size/4,curr.y),
 
-						find_average(get_chunck(curr.x,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x,curr.y + curr.size/4,curr.size/4),curr.x,curr.y + curr.size/4),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + curr.size/4,curr.size/4),curr.x + curr.size/4,curr.y + curr.size/4),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + curr.size/4,curr.size/4),curr.x + 2*curr.size/4,curr.y + curr.size/4),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + curr.size/4,curr.size/4),curr.x + 3*curr.size/4,curr.y + curr.size/4),
 
-						find_average(get_chunck(curr.x,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 2*curr.size/4,curr.size/4)),
+						find_average(get_chunck(curr.x,curr.y + 2*curr.size/4,curr.size/4),curr.x,curr.y + 2*curr.size/4),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + 2*curr.size/4,curr.size/4),curr.x + curr.size/4,curr.y + 2*curr.size/4),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 2*curr.size/4,curr.size/4),curr.x + 2*curr.size/4,curr.y + 2*curr.size/4),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 2*curr.size/4,curr.size/4),curr.x + 3*curr.size/4,curr.y + 2*curr.size/4),
 
-						find_average(get_chunck(curr.x,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4)),
-						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4))
+						find_average(get_chunck(curr.x,curr.y + 3*curr.size/4,curr.size/4),curr.x,curr.y + 3*curr.size/4),
+						find_average(get_chunck(curr.x + curr.size/4,curr.y + 3*curr.size/4,curr.size/4),curr.x + curr.size/4,curr.y + 3*curr.size/4),
+						find_average(get_chunck(curr.x + 2*curr.size/4,curr.y + 3*curr.size/4,curr.size/4),curr.x + 2*curr.size/4,curr.y + 3*curr.size/4),
+						find_average(get_chunck(curr.x + 3*curr.size/4,curr.y + 3*curr.size/4,curr.size/4),curr.x + 3*curr.size/4,curr.y + 3*curr.size/4)
 					]
 				}
 				if(curr.size === 4){
