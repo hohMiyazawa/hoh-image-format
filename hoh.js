@@ -738,12 +738,30 @@ function yiq26_min_I_from_Y(Y){
 	}
 }
 
+function yiq26_max_I_from_Y(Y){
+	if(Y < 128){
+		return Math.min(259 + Y*4,511)
+	}
+	else{
+		return Math.min(256 + (255 - Y)*4,511)
+	}
+}
+
 function yiq26_min_Q_from_Y(Y){
 	if(Y < 128){
 		return Math.max(255 - Y*2,1)
 	}
 	else{
-		return 1
+		return Math.max(256 + (Y - 255)*2,1)
+	}
+}
+
+function yiq26_max_Q_from_Y(Y){
+	if(Y < 128){
+		return Math.min(255 + Y*2,511)
+	}
+	else{
+		return Math.min(256 + (255 - Y)*2,511)
 	}
 }
 
@@ -1538,7 +1556,6 @@ function encoder(imageData,options){
 		let inverseTranslation;
 		let translationTable = new Array(CHANNEL_POWER);
 		let snapUpTable = new Array(CHANNEL_POWER);
-		let snapDownTable = new Array(CHANNEL_POWER);
 		if(CHANNEL_LENGTH > 1){
 //tables
 			frequencyTable = new Array(CHANNEL_POWER).fill(0);
@@ -3229,11 +3246,29 @@ function encoder(imageData,options){
 				for(let j=0;j<min_chroma;j++){
 					lumaMap_data[i][j] = 0
 				}
+				let max_chroma = yiq26_max_I_from_Y(i);
+				for(let j=table_ceiling;j--;){
+					if(inverseTranslation[j] > max_chroma){
+						lumaMap_data[i][j] = 0
+					}
+					else{
+						j = 0
+					}
+				}
 			}
 			else if(c_options.name === "Q"){
 				let min_chroma = snapUpTable[yiq26_min_Q_from_Y(i)];
 				for(let j=0;j<min_chroma;j++){
 					lumaMap_data[i][j] = 0
+				}
+				let max_chroma = yiq26_max_Q_from_Y(i);
+				for(let j=table_ceiling;j--;){
+					if(inverseTranslation[j] > max_chroma){
+						lumaMap_data[i][j] = 0
+					}
+					else{
+						j = 0
+					}
 				}
 			}
 		}
@@ -4215,6 +4250,15 @@ function decoder(hohData,options){
 						for(let j=0;j<min_chroma;j++){
 							lumaMap_data[i][j] = 0
 						}
+						let max_chroma = yiq26_max_I_from_Y(i);
+						for(let j=table_ceiling;j--;){
+							if(translationTable[j] > max_chroma){
+								lumaMap_data[i][j] = 0
+							}
+							else{
+								j = 0
+							}
+						}
 					}
 				}
 				readColour = function(){
@@ -4287,6 +4331,15 @@ function decoder(hohData,options){
 						let min_chroma = snapUpTable[yiq26_min_Q_from_Y(i)];
 						for(let j=0;j<min_chroma;j++){
 							lumaMap_data[i][j] = 0
+						}
+						let max_chroma = yiq26_max_Q_from_Y(i);
+						for(let j=table_ceiling;j--;){
+							if(translationTable[j] > max_chroma){
+								lumaMap_data[i][j] = 0
+							}
+							else{
+								j = 0
+							}
 						}
 					}
 				}
