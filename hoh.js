@@ -738,6 +738,15 @@ function yiq26_min_I_from_Y(Y){
 	}
 }
 
+function yiq26_min_Q_from_Y(Y){
+	if(Y < 128){
+		return Math.max(255 - Y*2,1)
+	}
+	else{
+		return 1
+	}
+}
+
 function yiq26a_to_rgba(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i += 4){
@@ -3221,6 +3230,12 @@ function encoder(imageData,options){
 					lumaMap_data[i][j] = 0
 				}
 			}
+			else if(c_options.name === "Q"){
+				let min_chroma = snapUpTable[yiq26_min_Q_from_Y(i)];
+				for(let j=0;j<min_chroma;j++){
+					lumaMap_data[i][j] = 0
+				}
+			}
 		}
 
 		let IMap_data = [];
@@ -4268,6 +4283,12 @@ function decoder(hohData,options){
 				let lumaMap_data = [];
 				for(let i=0;i<256;i++){
 					lumaMap_data.push(new Array(table_ceiling).fill(1))
+					if(options.name === "Q"){
+						let min_chroma = snapUpTable[yiq26_min_Q_from_Y(i)];
+						for(let j=0;j<min_chroma;j++){
+							lumaMap_data[i][j] = 0
+						}
+					}
 				}
 				let IMap_data = [];
 				for(let i=0;i<IMapDepth;i++){

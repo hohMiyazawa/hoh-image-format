@@ -163,12 +163,12 @@ buttonElementEncode.addEventListener("click",html_encode,false);
 for(let i=0;i<256;i++){
 for(let j=0;j<256;j++){
 for(let k=0;k<256;k++){
-	if(rgb_to_yiq26([i,j,k])[0] > 253){
+	if(rgb_to_yiq26([i,j,k])[0] < 2){
 		snu.push(rgb_to_yiq26([i,j,k]))
 	}
 }}};
 
-console.log(snu.sort((a,b) => a[1] - b[1])[0])*/
+console.log(snu.sort((a,b) => a[2] - b[2])[0])*/
 		</script>
 	</body>
 </html>
