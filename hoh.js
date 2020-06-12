@@ -758,7 +758,7 @@ function yiq26_min_Q_from_Y(Y){
 
 function yiq26_max_Q_from_Y(Y){
 	if(Y < 128){
-		return Math.min(255 + Y*2,511)
+		return Math.min(257 + Y*2,511)
 	}
 	else{
 		return Math.min(256 + (255 - Y)*2,511)
@@ -3331,7 +3331,7 @@ function encoder(imageData,options){
 								else{
 									curr_luma = lumaMap[previousWas.x][previousWas.y + 1]
 								}
-								if(c_options.name === "Q" || c_options.name === "Cg"){
+								if((c_options.name === "Q" || c_options.name === "Cg")){
 									let curr_I;
 									if(pixelTrace.length === 0){
 										curr_I = IMap[previousWas.x][previousWas.y]
@@ -3347,7 +3347,7 @@ function encoder(imageData,options){
 									}
 									localProbability = localProbability.map((val,index) => {
 										return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]) * Math.cbrt(IMap_data[curr_I][index]))
-									})
+									});
 									IMap_data[curr_I][waiting]++
 								}
 								else{
