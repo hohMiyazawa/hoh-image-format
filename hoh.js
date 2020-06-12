@@ -730,7 +730,12 @@ function rgb_to_yiq26(imageData){
 }
 
 function yiq26_min_I_from_Y(Y){
-	return Math.max(253 - Y*4,1)
+	if(Y < 128){
+		return Math.max(253 - Y*4,1)
+	}
+	else{
+		return Math.max(256 + (Y - 255)*4,1)
+	}
 }
 
 function yiq26a_to_rgba(imageData){
@@ -1358,7 +1363,7 @@ function encoder(imageData,options){
 
 	if(!options.target_pixelFormat){
 		if(options.pixelFormat === "rgb"){
-			if(options.colourQuantizer === 0){
+			if(options.colourQuantizer === 0 && options.quantizer === 0){
 				options.target_pixelFormat = "yiq26"
 			}
 			else{
@@ -1366,7 +1371,7 @@ function encoder(imageData,options){
 			}
 		}
 		else if(options.pixelFormat === "rgba"){
-			if(options.colourQuantizer === 0){
+			if(options.colourQuantizer === 0 && options.quantizer === 0){
 				options.target_pixelFormat = "yiq26a"
 			}
 			else{
@@ -3209,8 +3214,15 @@ function encoder(imageData,options){
 
 		let lumaMap_data = [];
 		for(let i=0;i<256;i++){
-			lumaMap_data.push(new Array(table_ceiling).fill(1))
+			lumaMap_data.push(new Array(table_ceiling).fill(1));
+			if(c_options.name === "I"){
+				let min_chroma = snapUpTable[yiq26_min_I_from_Y(i)];
+				for(let j=0;j<min_chroma;j++){
+					lumaMap_data[i][j] = 0
+				}
+			}
 		}
+
 		let IMap_data = [];
 		for(let i=0;i<IMapDepth;i++){
 			IMap_data.push(new Array(table_ceiling).fill(1))
@@ -3383,6 +3395,7 @@ function encoder(imageData,options){
 		});
 		
 		enc.finish();
+		//console.log(absolutes);
 		//console.log(DEBUG_integer_f)
 
 		bitBuffer = bitBuffer.concat(encodeVarint(middleBuffer.length,BYTE_LENGTH));
@@ -3891,6 +3904,7 @@ function decoder(hohData,options){
 			imageData.push(new Array(height).fill(options.fallBack))
 		}
 		let translationTable = [];
+		let snapUpTable = [];
 		try{
 			if(CHANNEL_LENGTH > 1){
 				let flagBit1 = readBit();
@@ -3959,6 +3973,13 @@ function decoder(hohData,options){
 			}
 			else{
 				translationTable = [0,1]
+			}
+			let index = 0;
+			for(let i=0;i<CHANNEL_POWER;i++){
+				snapUpTable[i] = index;
+				if(translationTable[index] === i){
+					index++
+				}
 			}
 		}
 		catch(e){
@@ -4173,7 +4194,13 @@ function decoder(hohData,options){
 			if(options.name === "I" || options.name === "Co"){
 				let lumaMap_data = [];
 				for(let i=0;i<256;i++){
-					lumaMap_data.push(new Array(table_ceiling).fill(1))
+					lumaMap_data.push(new Array(table_ceiling).fill(1));
+					if(options.name === "I"){
+						let min_chroma = snapUpTable[yiq26_min_I_from_Y(i)];
+						for(let j=0;j<min_chroma;j++){
+							lumaMap_data[i][j] = 0
+						}
+					}
 				}
 				readColour = function(){
 					
