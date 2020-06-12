@@ -1482,6 +1482,8 @@ function encoder(imageData,options){
 	let alphaMap;
 
 	let lumaMap;
+	let IMap;
+	let IMapDepth = 0;
 
 	encodeChannel = function(channelData,c_options){
 		const CHANNEL_LENGTH = c_options.bitDepth;
@@ -3209,6 +3211,10 @@ function encoder(imageData,options){
 		for(let i=0;i<256;i++){
 			lumaMap_data.push(new Array(table_ceiling).fill(1))
 		}
+		let IMap_data = [];
+		for(let i=0;i<IMapDepth;i++){
+			IMap_data.push(new Array(table_ceiling).fill(1))
+		}
 
 		aritmetic_queue.forEach(waiting => {
 			try{
@@ -3263,9 +3269,30 @@ function encoder(imageData,options){
 								else{
 									curr_luma = lumaMap[previousWas.x][previousWas.y + 1]
 								}
-								localProbability = localProbability.map((val,index) => {
-									return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
-								})
+								if(c_options.name === "Q" || c_options.name === "Cg"){
+									let curr_I;
+									if(pixelTrace.length === 0){
+										curr_I = IMap[previousWas.x][previousWas.y]
+									}
+									else if(pixelTrace.length === 1){
+										curr_I = IMap[previousWas.x + 1][previousWas.y]
+									}
+									else if(pixelTrace.length === 2){
+										curr_I = IMap[previousWas.x + 1][previousWas.y + 1]
+									}
+									else{
+										curr_I = IMap[previousWas.x][previousWas.y + 1]
+									}
+									localProbability = localProbability.map((val,index) => {
+										return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]) * Math.cbrt(IMap_data[curr_I][index]))
+									})
+									IMap_data[curr_I][waiting]++
+								}
+								else{
+									localProbability = localProbability.map((val,index) => {
+										return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
+									})
+								}
 								lumaMap_data[curr_luma][waiting]++
 							}
 						}
@@ -3365,6 +3392,11 @@ function encoder(imageData,options){
 		else if(c_options.name === "Y"){
 			console.log("ADDED LUMA MAP")
 			lumaMap = currentEncode.map(row => row.map(val => inverseTranslation[val]))
+		}
+		else if(c_options.name === "I" || c_options.name === "Co"){
+			console.log("ADDED I MAP")
+			IMap = currentEncode.map(row => row.map(val => inverseTranslation[val]));
+			IMapDepth = CHANNEL_POWER
 		}
 
 		return bitBuffer
@@ -3807,6 +3839,8 @@ function decoder(hohData,options){
 	let botchedFlag = false;
 
 	let lumaMap;
+	let IMap;
+	let IMapDepth = 0;
 
 	let decodeChannel = function(options){
 		const CHANNEL_LENGTH = options.bitDepth;
@@ -4126,7 +4160,7 @@ function decoder(hohData,options){
 				return symbol
 			}
 
-			if(options.name === "I" || options.name === "Q" || options.name === "Co" || options.name === "Cg"){
+			if(options.name === "I" || options.name === "Co"){
 				let lumaMap_data = [];
 				for(let i=0;i<256;i++){
 					lumaMap_data.push(new Array(table_ceiling).fill(1))
@@ -4184,6 +4218,78 @@ function decoder(hohData,options){
 					pixelTrace.push(symbol);
 					if(previousWas.symbol === "pixels"){
 						lumaMap_data[curr_luma][symbol]++
+					}
+					return symbol
+				}
+			}
+			else if(options.name === "Q" || options.name === "Cg"){
+				let lumaMap_data = [];
+				for(let i=0;i<256;i++){
+					lumaMap_data.push(new Array(table_ceiling).fill(1))
+				}
+				let IMap_data = [];
+				for(let i=0;i<IMapDepth;i++){
+					IMap_data.push(new Array(table_ceiling).fill(1))
+				}
+				readColour = function(){
+					
+					let localProbability = absolutes.map((val,index) => {
+						return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+					})
+					let curr_luma;
+					let curr_I;
+					if(previousWas.symbol === "pixels"){
+						if(pixelTrace.length === 3){
+							if(pixelTrace[0] === pixelTrace[1]){
+								localProbability[pixelTrace[2]] = 0;
+								localProbability[pixelTrace[0]] = 0
+							}
+							else if(pixelTrace[1] === pixelTrace[2]){
+								localProbability[pixelTrace[2]] = 0;
+								localProbability[pixelTrace[0]] = 0
+							}
+						}
+						else if(pixelTrace.length === 2){
+							if(pixelTrace[0] === pixelTrace[1]){
+								localProbability[pixelTrace[0]] = 0
+							}
+						}
+						if(pixelTrace.length === 0){
+							curr_luma = lumaMap[previousWas.x][previousWas.y];
+							curr_I = IMap[previousWas.x][previousWas.y];
+						}
+						else if(pixelTrace.length === 1){
+							curr_luma = lumaMap[previousWas.x + 1][previousWas.y];
+							curr_I = IMap[previousWas.x + 1][previousWas.y]
+						}
+						else if(pixelTrace.length === 2){
+							curr_luma = lumaMap[previousWas.x + 1][previousWas.y + 1];
+							curr_I = IMap[previousWas.x + 1][previousWas.y + 1]
+						}
+						else{
+							curr_luma = lumaMap[previousWas.x][previousWas.y + 1];
+							curr_I = IMap[previousWas.x][previousWas.y + 1]
+						}
+						localProbability = localProbability.map((val,index) => {
+							return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]) * Math.cbrt(IMap_data[curr_I][index]))
+						})
+					}
+					else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
+						localProbability[pixelTrace[0]] = 0
+					}
+					else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
+						localProbability[pixelTrace[0]] = 0
+					}
+
+					let symbol = dec.read(new FrequencyTable(localProbability));
+					let encodedInteger = (symbol - forige + table_ceiling) % table_ceiling;
+					forige = symbol;
+					deltas[encodedInteger]++;
+					absolutes[symbol]++;
+					pixelTrace.push(symbol);
+					if(previousWas.symbol === "pixels"){
+						lumaMap_data[curr_luma][symbol]++;
+						IMap_data[curr_I][symbol]++
 					}
 					return symbol
 				}
@@ -5007,6 +5113,11 @@ function decoder(hohData,options){
 		if(options.name === "Y"){
 			console.log("ADDED LUMA MAP")
 			lumaMap = imageData
+		}
+		else if(options.name === "I" || options.name === "Co"){
+			console.log("ADDED I MAP")
+			IMap = imageData;
+			IMapDepth = CHANNEL_POWER
 		}
 		return imageData
 	}
