@@ -3205,6 +3205,11 @@ function encoder(imageData,options){
 		let previousWas = false;
 		let previousWas_large = false;
 
+		let lumaMap_data = [];
+		for(let i=0;i<256;i++){
+			lumaMap_data.push(new Array(table_ceiling).fill(1))
+		}
+
 		aritmetic_queue.forEach(waiting => {
 			try{
 				if(isFinite(waiting)){
@@ -3226,7 +3231,7 @@ function encoder(imageData,options){
 						}
 
 						let localProbability = absolutes.map((val,index) => {
-							return Math.round(Math.sqrt(val)) * deltas[(index - forige + table_ceiling) % table_ceiling]
+							return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
 						})
 						if(previousWas.symbol === "pixels"){
 							if(pixelTrace.length === 3){
@@ -3243,6 +3248,25 @@ function encoder(imageData,options){
 								if(pixelTrace[0] === pixelTrace[1]){
 									localProbability[pixelTrace[0]] = 0
 								}
+							}
+							if(c_options.name === "I" || c_options.name === "Q" || c_options.name === "Co" || c_options.name === "Cg"){
+								let curr_luma;
+								if(pixelTrace.length === 0){
+									curr_luma = lumaMap[previousWas.x][previousWas.y]
+								}
+								else if(pixelTrace.length === 1){
+									curr_luma = lumaMap[previousWas.x + 1][previousWas.y]
+								}
+								else if(pixelTrace.length === 2){
+									curr_luma = lumaMap[previousWas.x + 1][previousWas.y + 1]
+								}
+								else{
+									curr_luma = lumaMap[previousWas.x][previousWas.y + 1]
+								}
+								localProbability = localProbability.map((val,index) => {
+									return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
+								})
+								lumaMap_data[curr_luma][waiting]++
 							}
 						}
 						else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
@@ -3337,6 +3361,10 @@ function encoder(imageData,options){
 		if(c_options.name === "alpha" && frequencyTable[0] && options.fullTransparancyOptimization){
 			hasAlphaMap = true;
 			alphaMap = currentEncode.map(row => row.map(val => val === 0))
+		}
+		else if(c_options.name === "Y"){
+			console.log("ADDED LUMA MAP")
+			lumaMap = currentEncode.map(row => row.map(val => inverseTranslation[val]))
 		}
 
 		return bitBuffer
@@ -3778,6 +3806,8 @@ function decoder(hohData,options){
 
 	let botchedFlag = false;
 
+	let lumaMap;
+
 	let decodeChannel = function(options){
 		const CHANNEL_LENGTH = options.bitDepth;
 		const CHANNEL_POWER = Math.pow(2,CHANNEL_LENGTH);
@@ -4004,7 +4034,7 @@ function decoder(hohData,options){
 				return previousWas_large
 			}
 
-			let readSmallSymbol = function(){
+			let readSmallSymbol = function(curr){
 				previousWas_large = false;
 				pixelTrace = [];
 				let symbol;
@@ -4017,8 +4047,12 @@ function decoder(hohData,options){
 				DEBUG_small_f.increment(symbol);
 				predictionGrid_small[forigeg_small].increment(symbol);
 				forigeg_small = symbol;
-				previousWas = smallSymbolTable[symbol];
-				return previousWas
+				previousWas = {
+					symbol: smallSymbolTable[symbol],
+					x: curr.x,
+					y: curr.y
+				}
+				return smallSymbolTable[symbol]
 			};
 
 			if(table_ceiling === 2){
@@ -4057,9 +4091,9 @@ function decoder(hohData,options){
 			let readColour = function(){
 				
 				let localProbability = absolutes.map((val,index) => {
-					return Math.round(Math.sqrt(val)) * deltas[(index - forige + table_ceiling) % table_ceiling]
+					return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
 				})
-				if(previousWas === "pixels"){
+				if(previousWas.symbol === "pixels"){
 					if(pixelTrace.length === 3){
 						if(pixelTrace[0] === pixelTrace[1]){
 							localProbability[pixelTrace[2]] = 0;
@@ -4076,7 +4110,7 @@ function decoder(hohData,options){
 						}
 					}
 				}
-				else if(pixelTrace.length && previousWas && previousWas !== "whole"){
+				else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
 					localProbability[pixelTrace[0]] = 0
 				}
 				else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
@@ -4090,6 +4124,69 @@ function decoder(hohData,options){
 				absolutes[symbol]++;
 				pixelTrace.push(symbol)
 				return symbol
+			}
+
+			if(options.name === "I" || options.name === "Q" || options.name === "Co" || options.name === "Cg"){
+				let lumaMap_data = [];
+				for(let i=0;i<256;i++){
+					lumaMap_data.push(new Array(table_ceiling).fill(1))
+				}
+				readColour = function(){
+					
+					let localProbability = absolutes.map((val,index) => {
+						return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+					})
+					let curr_luma;
+					if(previousWas.symbol === "pixels"){
+						if(pixelTrace.length === 3){
+							if(pixelTrace[0] === pixelTrace[1]){
+								localProbability[pixelTrace[2]] = 0;
+								localProbability[pixelTrace[0]] = 0
+							}
+							else if(pixelTrace[1] === pixelTrace[2]){
+								localProbability[pixelTrace[2]] = 0;
+								localProbability[pixelTrace[0]] = 0
+							}
+						}
+						else if(pixelTrace.length === 2){
+							if(pixelTrace[0] === pixelTrace[1]){
+								localProbability[pixelTrace[0]] = 0
+							}
+						}
+						if(pixelTrace.length === 0){
+							curr_luma = lumaMap[previousWas.x][previousWas.y]
+						}
+						else if(pixelTrace.length === 1){
+							curr_luma = lumaMap[previousWas.x + 1][previousWas.y]
+						}
+						else if(pixelTrace.length === 2){
+							curr_luma = lumaMap[previousWas.x + 1][previousWas.y + 1]
+						}
+						else{
+							curr_luma = lumaMap[previousWas.x][previousWas.y + 1]
+						}
+						localProbability = localProbability.map((val,index) => {
+							return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
+						})
+					}
+					else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
+						localProbability[pixelTrace[0]] = 0
+					}
+					else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
+						localProbability[pixelTrace[0]] = 0
+					}
+
+					let symbol = dec.read(new FrequencyTable(localProbability));
+					let encodedInteger = (symbol - forige + table_ceiling) % table_ceiling;
+					forige = symbol;
+					deltas[encodedInteger]++;
+					absolutes[symbol]++;
+					pixelTrace.push(symbol);
+					if(previousWas.symbol === "pixels"){
+						lumaMap_data[curr_luma][symbol]++
+					}
+					return symbol
+				}
 			}
 
 			if(table_ceiling === 2){
@@ -4791,7 +4888,7 @@ function decoder(hohData,options){
 					while(previous2x2_curr.length > 3){
 						previous2x2_curr.shift()
 					}
-					let instruction = readSmallSymbol();
+					let instruction = readSmallSymbol(curr);
 					if(table_ceiling === 2){
 						write2x2(curr,...rePlex(instruction,4))
 						continue
@@ -4907,6 +5004,10 @@ function decoder(hohData,options){
 				imageData[i][j] = translationTable[currentEncode[i][j]]
 			}
 		}
+		if(options.name === "Y"){
+			console.log("ADDED LUMA MAP")
+			lumaMap = imageData
+		}
 		return imageData
 	}
 	if(pixelFormat === "greyscale"){
@@ -4919,7 +5020,7 @@ function decoder(hohData,options){
 		}
 	}
 	else if(pixelFormat === "yiq26"){
-		channels.push(decodeChannel({bitDepth: 8}));
+		channels.push(decodeChannel({bitDepth: 8,name: "Y"}));
 		if(botchedFlag){
 			let fill256 = [];
 			for(let i=0;i<width;i++){
@@ -4928,7 +5029,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 9, fallback: 256}))
+			channels.push(decodeChannel({bitDepth: 9, fallback: 256,name: "I"}))
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4938,7 +5039,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 9, fallback: 256}))
+			channels.push(decodeChannel({bitDepth: 9, fallback: 256,name: "Q"}))
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -4958,7 +5059,7 @@ function decoder(hohData,options){
 			channels[0] = fill256
 		}
 		else{
-			channels[0] = decodeChannel({bitDepth: 8})
+			channels[0] = decodeChannel({bitDepth: 8,name: "Y"})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4968,7 +5069,7 @@ function decoder(hohData,options){
 			channels[1] = fill256
 		}
 		else{
-			channels[1] = decodeChannel({bitDepth: 9, fallback: 256})
+			channels[1] = decodeChannel({bitDepth: 9, fallback: 256,name: "I"})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -4978,7 +5079,7 @@ function decoder(hohData,options){
 			channels[2] = fill256
 		}
 		else{
-			channels[2] = decodeChannel({bitDepth: 9, fallback: 256})
+			channels[2] = decodeChannel({bitDepth: 9, fallback: 256,name: "Q"})
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -4988,7 +5089,7 @@ function decoder(hohData,options){
 		}
 	}
 	else if(pixelFormat === "ycocg"){
-		channels.push(decodeChannel({bitDepth: 8}));
+		channels.push(decodeChannel({bitDepth: 8,name: "Y"}));
 		if(botchedFlag){
 			let fill256 = [];
 			for(let i=0;i<width;i++){
@@ -4997,7 +5098,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 8, fallback: 128}))
+			channels.push(decodeChannel({bitDepth: 8, fallback: 128,name: "Co"}))
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -5007,7 +5108,7 @@ function decoder(hohData,options){
 			channels.push(fill256)
 		}
 		else{
-			channels.push(decodeChannel({bitDepth: 8, fallback: 128}))
+			channels.push(decodeChannel({bitDepth: 8, fallback: 128,name: "Cg"}))
 		}
 		let rawData = multiplexChannels(channels);
 		return {
@@ -5027,7 +5128,7 @@ function decoder(hohData,options){
 			channels[0] = fill256
 		}
 		else{
-			channels[0] = decodeChannel({bitDepth: 8})
+			channels[0] = decodeChannel({bitDepth: 8,name: "Y"})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -5037,7 +5138,7 @@ function decoder(hohData,options){
 			channels[1] = fill256
 		}
 		else{
-			channels[1] = decodeChannel({bitDepth: 8, fallback: 128})
+			channels[1] = decodeChannel({bitDepth: 8, fallback: 128,name: "Co"})
 		}
 		if(botchedFlag){
 			let fill256 = [];
@@ -5047,7 +5148,7 @@ function decoder(hohData,options){
 			channels[2] = fill256
 		}
 		else{
-			channels[2] = decodeChannel({bitDepth: 8, fallback: 128})
+			channels[2] = decodeChannel({bitDepth: 8, fallback: 128,name: "Cg"})
 		}
 		let rawData = multiplexChannels(channels);
 		return {
