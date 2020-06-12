@@ -3302,6 +3302,11 @@ function encoder(imageData,options){
 						else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
+						let c_tot = localProbability.reduce((acc,val) => acc + val,0);
+						if(enc._maximum_total <= c_tot){
+							let reduction = Math.ceil(c_tot/enc._maximum_total);
+							localProbability = localProbability.map(val => Math.ceil(val/reduction))
+						}
 						enc.write(
 							new FrequencyTable(localProbability),
 							waiting
@@ -4150,6 +4155,11 @@ function decoder(hohData,options){
 				else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 					localProbability[pixelTrace[0]] = 0
 				}
+				let c_tot = localProbability.reduce((acc,val) => acc + val,0);
+				if(dec._maximum_total <= c_tot){
+					let reduction = Math.ceil(c_tot/dec._maximum_total);
+					localProbability = localProbability.map(val => Math.ceil(val/reduction))
+				}
 
 				let symbol = dec.read(new FrequencyTable(localProbability));
 				let encodedInteger = (symbol - forige + table_ceiling) % table_ceiling;
@@ -4208,6 +4218,11 @@ function decoder(hohData,options){
 					}
 					else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 						localProbability[pixelTrace[0]] = 0
+					}
+					let c_tot = localProbability.reduce((acc,val) => acc + val,0);
+					if(dec._maximum_total <= c_tot){
+						let reduction = Math.ceil(c_tot/dec._maximum_total);
+						localProbability = localProbability.map(val => Math.ceil(val/reduction))
 					}
 
 					let symbol = dec.read(new FrequencyTable(localProbability));
@@ -4279,6 +4294,11 @@ function decoder(hohData,options){
 					}
 					else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
 						localProbability[pixelTrace[0]] = 0
+					}
+					let c_tot = localProbability.reduce((acc,val) => acc + val,0);
+					if(dec._maximum_total <= c_tot){
+						let reduction = Math.ceil(c_tot/dec._maximum_total);
+						localProbability = localProbability.map(val => Math.ceil(val/reduction))
 					}
 
 					let symbol = dec.read(new FrequencyTable(localProbability));
