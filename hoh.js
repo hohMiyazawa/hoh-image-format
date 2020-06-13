@@ -2907,7 +2907,10 @@ function encoder(imageData,options){
 								}
 							}
 						}
-						if(nextPassed && blockQueue.length && options.copyBlocks && errorQueue[0].error > localQuantizer * 0.25){
+						if(
+							nextPassed && blockQueue.length && options.copyBlocks && errorQueue[0].error > localQuantizer * 0.25
+							&& (!["PREVIOUS","PREVIOUS2","PREVIOUS3","PREVIOUS4","PREVIOUS5","PREVIOUS6","PREVIOUS7","PREVIOUS8","PREVIOUS9","PREVIOUS10"].includes(errorQueue[0].symbol))
+						){
 							let passableQueue = [];
 							for(let i=0;i<blockQueue.length;i++){
 								let inFocus = blockQueue[blockQueue.length - i - 1];
