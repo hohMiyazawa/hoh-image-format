@@ -2908,53 +2908,33 @@ function encoder(imageData,options){
 							}
 						}
 						if(nextPassed && blockQueue.length && options.copyBlocks && errorQueue[0].error > localQuantizer * 0.25){
-							let nextBlock = blockQueue[blockQueue.length - 1];
-							if(nextBlock.size === curr.size){
-								let next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
-								if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-									nextPassed = false
-								}
-								if(nextPassed && blockQueue.length >= 2){
-									nextBlock = blockQueue[blockQueue.length - 2];
-									if(nextBlock.size === curr.size){
-										next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
-										if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-											nextPassed = false
-										}
+							let passableQueue = [];
+							for(let i=0;i<blockQueue.length;i++){
+								let inFocus = blockQueue[blockQueue.length - i - 1];
+								let handleInFocus = function(block){
+									if(passableQueue.length >= 6){
+										return
 									}
-								}
-								if(nextPassed && blockQueue.length >= 3){
-									nextBlock = blockQueue[blockQueue.length - 3];
-									if(nextBlock.size === curr.size){
-										next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
-										if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-											nextPassed = false
-										}
+									if(block.size === curr.size){
+										passableQueue.push(block)
 									}
+									else{
+										handleInFocus({x: block.x,y: block.y + block.size/2,size: block.size/2});
+										handleInFocus({x: block.x + block.size/2,y: block.y + block.size/2,size: block.size/2});
+										handleInFocus({x: block.x + block.size/2,y: block.y,size: block.size/2});
+										handleInFocus({x: block.x,y: block.y,size: block.size/2});
+									}
+								};
+								handleInFocus(inFocus);
+								if(passableQueue.length >= 6){
+									break
 								}
 							}
-							else if(nextBlock.size === curr.size * 2){
-								let next_chunck = get_chunck(nextBlock.x,nextBlock.y + nextBlock.size/2,nextBlock.size/2);
+							for(let i=0;i<Math.min(passableQueue.length,6);i++){
+								let next_chunck = get_chunck(passableQueue[i].x,passableQueue[i].y,passableQueue[i].size);
 								if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-									nextPassed = false
-								}
-								if(nextPassed){
-									let next_chunck = get_chunck(nextBlock.x + nextBlock.size/2,nextBlock.y + nextBlock.size/2,nextBlock.size/2);
-									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-										nextPassed = false
-									}
-								}
-								if(nextPassed){
-									let next_chunck = get_chunck(nextBlock.x + nextBlock.size/2,nextBlock.y,nextBlock.size/2);
-									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-										nextPassed = false
-									}
-								}
-								if(nextPassed){
-									let next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size/2);
-									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
-										nextPassed = false
-									}
+									nextPassed = false;
+									break;
 								}
 							}
 						}
