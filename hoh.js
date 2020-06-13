@@ -1734,9 +1734,25 @@ function encoder(imageData,options){
 			}
 			return sumError/(chunck1.length * chunck1[0].length)
 		}
+		let error_compare_lossless = function(chunck1,chunck2,offx,offy){
+			for(let i=0;i<chunck1.length;i++){
+				for(let j=0;j<chunck1[i].length;j++){
+					if(offx + i < width && offy + j < height){
+						if(
+							Math.abs(
+								chunck2[i][j] - chunck1[i][j]
+							)
+						){
+							return 1
+						}
+					}
+				}
+			}
+			return 0
+		}
 		if(c_options.quantizer === 0){
 			if(hasAlphaMap){
-				error_compare = function(chunck1,chunck2,offx,offy){
+				error_compare_lossless = function(chunck1,chunck2,offx,offy){
 					for(let i=0;i<chunck1.length;i++){
 						for(let j=0;j<chunck1[i].length;j++){
 							if(offx + i < width && offy + j < height){
@@ -1752,6 +1768,7 @@ function encoder(imageData,options){
 					}
 					return 0
 				}
+				error_compare = error_compare_lossless;
 				find_average = function(chunck,offx,offy){
 					let sumAlpha = 0;
 					let sum = 0;
@@ -1772,22 +1789,7 @@ function encoder(imageData,options){
 				}
 			}
 			else{
-				error_compare = function(chunck1,chunck2,offx,offy){
-					for(let i=0;i<chunck1.length;i++){
-						for(let j=0;j<chunck1[i].length;j++){
-							if(offx + i < width && offy + j < height){
-								if(
-									Math.abs(
-										chunck2[i][j] - chunck1[i][j]
-									)
-								){
-									return 1
-								}
-							}
-						}
-					}
-					return 0
-				}
+				error_compare = error_compare_lossless
 			}
 		}
 			
@@ -2843,61 +2845,72 @@ function encoder(imageData,options){
 						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
 					){*/
 						let nextPassed = true;
-						if(curr.size > 4 && errorQueue[0].error > localQuantizer * 0.8){
-							if(sharpener(
-								top_third_large,
-								bottom_third_large,
-								(a,b) => create_vertical_dummy(a,b,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"vertical_dummy"
-							).error < errorQueue[0].error){
-								nextPassed = false
+						if(errorQueue[0].error > localQuantizer * 0.8){
+							if(curr.size > 4){
+								if(sharpener(
+									top_third_large,
+									bottom_third_large,
+									(a,b) => create_vertical_dummy(a,b,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"vertical_dummy"
+								).error < errorQueue[0].error){
+									nextPassed = false
+								}
+								else if(sharpener(
+									left_third_large,
+									right_third_large,
+									(a,b) => create_horizontal_dummy(a,b,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"horizontal_dummy"
+								).error < errorQueue[0].error){
+									nextPassed = false
+								}
+								else if((sharpener(
+									NW_s,
+									SE,
+									(a,b) => create_diagonal_half_solid_dummy(a,b,0,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"diagonal_half_NW_dummy"
+								)).error < errorQueue[0].error){
+									nextPassed = false
+								}
+								else if((sharpener(
+									NE_s,
+									SW,
+									(a,b) => create_diagonal_half_solid_dummy(a,b,1,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"diagonal_half_NE_dummy"
+								)).error < errorQueue[0].error){
+									nextPassed = false
+								}
+								else if((sharpener(
+									SE_s,
+									NW,
+									(a,b) => create_diagonal_half_solid_dummy(a,b,2,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"diagonal_half_SE_dummy"
+								)).error < errorQueue[0].error){
+									nextPassed = false
+								}
+								else if((sharpener(
+									SW_s,
+									NE,
+									(a,b) => create_diagonal_half_solid_dummy(a,b,3,curr.size),
+									patch => error_compare(chunck,patch,curr.x,curr.y),
+									"diagonal_half_SW_dummy"
+								)).error < errorQueue[0].error){
+									nextPassed = false
+								}
 							}
-							else if(sharpener(
-								left_third_large,
-								right_third_large,
-								(a,b) => create_horizontal_dummy(a,b,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"horizontal_dummy"
-							).error < errorQueue[0].error){
-								nextPassed = false
+						}
+						if(nextPassed && blockQueue.length && options.copyBlocks && errorQueue[0].error > localQuantizer * 0.25){
+							let nextBlock = blockQueue[blockQueue.length - 1];
+							if(nextBlock.size === curr.size){
+								let next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
+								if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+									nextPassed = false
+								}
 							}
-							/*else if((sharpener(
-								NW_s,
-								SE,
-								(a,b) => create_diagonal_half_solid_dummy(a,b,0,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"diagonal_half_NW_dummy"
-							)).error < errorQueue[0].error){
-								nextPassed = false
-							}
-							else if((sharpener(
-								NE_s,
-								SW,
-								(a,b) => create_diagonal_half_solid_dummy(a,b,1,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"diagonal_half_NE_dummy"
-							)).error < errorQueue[0].error){
-								nextPassed = false
-							}
-							else if((sharpener(
-								SE_s,
-								NW,
-								(a,b) => create_diagonal_half_solid_dummy(a,b,2,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"diagonal_half_SE_dummy"
-							)).error < errorQueue[0].error){
-								nextPassed = false
-							}
-							else if((sharpener(
-								SW_s,
-								NE,
-								(a,b) => create_diagonal_half_solid_dummy(a,b,3,curr.size),
-								patch => error_compare(chunck,patch,curr.x,curr.y),
-								"diagonal_half_SW_dummy"
-							)).error < errorQueue[0].error){
-								nextPassed = false
-							}*/
 						}
 						if(nextPassed){
 							if(errorQueue[0].colours.length === 2 && errorQueue[0].colours[0] === errorQueue[0].colours[1]){
