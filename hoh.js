@@ -2824,15 +2824,15 @@ function encoder(imageData,options){
 					))
 				}
 
-				/*let TOPLEFT_equal = mArr[0] === mArr[1] && mArr[0] === mArr[4] && mArr[0] === mArr[5];
+				let TOPLEFT_equal = mArr[0] === mArr[1] && mArr[0] === mArr[4] && mArr[0] === mArr[5];
 				let TOPRIGHT_equal = mArr[2] === mArr[3] && mArr[2] === mArr[6] && mArr[2] === mArr[7];
 				let BOTTOMLEFT_equal = mArr[8] === mArr[9] && mArr[8] === mArr[12] && mArr[8] === mArr[13];
-				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];*/
+				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];
 
 
 				errorQueue.sort((a,b) => a.error - b.error || (b.symbol === "whole") - (a.symbol === "whole") || a.colours.length - b.colours.length);
 				if(errorQueue[0].error <= localQuantizer){
-					/*if(
+					if(
 						curr.size === 4
 						|| errorQueue[0].error === 0
 						|| table_ceiling < 10
@@ -2847,7 +2847,7 @@ function encoder(imageData,options){
 						|| (errorQueue[0].symbol === "horizontal_third" && (TOPRIGHT_equal && BOTTOMRIGHT_equal))
 						|| (errorQueue[0].symbol === "vertical_large_third" && (TOPLEFT_equal && TOPRIGHT_equal))
 						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
-					){*/
+					){
 						let nextPassed = true;
 						if(errorQueue[0].error > localQuantizer * 0.8){
 							if(curr.size > 4){
@@ -2993,7 +2993,7 @@ function encoder(imageData,options){
 							});
 							continue
 						}
-					//}
+					}
 				}
 				writeLargeSymbol("divide",curr.size === 4);
 				blockQueue.push({
