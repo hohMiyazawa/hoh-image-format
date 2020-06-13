@@ -2933,6 +2933,30 @@ function encoder(imageData,options){
 									}
 								}
 							}
+							else if(nextBlock.size === curr.size * 2){
+								let next_chunck = get_chunck(nextBlock.x,nextBlock.y + nextBlock.size/2,nextBlock.size/2);
+								if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+									nextPassed = false
+								}
+								if(nextPassed){
+									let next_chunck = get_chunck(nextBlock.x + nextBlock.size/2,nextBlock.y + nextBlock.size/2,nextBlock.size/2);
+									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+										nextPassed = false
+									}
+								}
+								if(nextPassed){
+									let next_chunck = get_chunck(nextBlock.x + nextBlock.size/2,nextBlock.y,nextBlock.size/2);
+									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+										nextPassed = false
+									}
+								}
+								if(nextPassed){
+									let next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size/2);
+									if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+										nextPassed = false
+									}
+								}
+							}
 						}
 						if(nextPassed){
 							if(errorQueue[0].colours.length === 2 && errorQueue[0].colours[0] === errorQueue[0].colours[1]){
