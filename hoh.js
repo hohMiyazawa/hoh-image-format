@@ -1704,6 +1704,7 @@ function encoder(imageData,options){
 
 		let error_compare = function(chunck1,chunck2,offx,offy){
 			let sumError = 0;
+			let skipped = 0;
 			for(let i=0;i<chunck1.length;i++){
 				for(let j=0;j<chunck1[i].length;j++){
 					if(offx + i < width && offy + j < height){
@@ -1730,9 +1731,12 @@ function encoder(imageData,options){
 							sumError += error * (options.edgeWeight * (Math.sqrt(chunck1.length) - 1) - 1)
 						}
 					}
+					else{
+						skipped++
+					}
 				}
 			}
-			return sumError/(chunck1.length * chunck1[0].length)
+			return sumError/(chunck1.length * chunck1[0].length - skipped)
 		}
 		let error_compare_lossless = function(chunck1,chunck2,offx,offy){
 			for(let i=0;i<chunck1.length;i++){
