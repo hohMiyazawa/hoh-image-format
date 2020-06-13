@@ -2910,6 +2910,24 @@ function encoder(imageData,options){
 								if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
 									nextPassed = false
 								}
+								if(nextPassed && blockQueue.length >= 2){
+									nextBlock = blockQueue[blockQueue.length - 2];
+									if(nextBlock.size === curr.size){
+										next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
+										if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+											nextPassed = false
+										}
+									}
+								}
+								if(nextPassed && blockQueue.length >= 3){
+									nextBlock = blockQueue[blockQueue.length - 3];
+									if(nextBlock.size === curr.size){
+										next_chunck = get_chunck(nextBlock.x,nextBlock.y,nextBlock.size);
+										if(error_compare(chunck,next_chunck,0,0) < errorQueue[0].error * 0.9){
+											nextPassed = false
+										}
+									}
+								}
 							}
 						}
 						if(nextPassed){
