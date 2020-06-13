@@ -1117,6 +1117,50 @@ function create_diagonal_half_solid(colour1,colour2,direction,size){
 	return data
 }
 
+function create_diagonal_half_solid_dummy(colour1,colour2,direction,size){
+	let data = [];
+	let corner = create_diagonal_half_solid(colour1,colour2,direction,size/2);
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(direction === 0){
+				if(i >= size/2 && j >= size/2){
+					col.push(corner[i - size/2][j - size/2])
+				}
+				else{
+					col.push(colour1)
+				}
+			}
+			else if(direction === 1){
+				if(i < size/2 && j >= size/2){
+					col.push(corner[i][j - size/2])
+				}
+				else{
+					col.push(colour1)
+				}
+			}
+			else if(direction === 2){
+				if(i < size/2 && j < size/2){
+					col.push(corner[i][j])
+				}
+				else{
+					col.push(colour1)
+				}
+			}
+			else if(direction === 3){
+				if(i >= size/2 && j < size/2){
+					col.push(corner[i - size/2][j])
+				}
+				else{
+					col.push(colour1)
+				}
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 
 function create_odd_solid(colour1,colour2,direction,steep,size){
 	let data = []
@@ -2462,6 +2506,17 @@ function encoder(imageData,options){
 				let bottom_third_large;
 				let left_third_large;
 				let right_third_large;
+				let NW = mArr[0];
+				let SE = mArr[15];
+
+				let NE = mArr[3];
+				let SW = mArr[12];
+
+				let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
+				let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
+
+				let NE_s = Math.round((mArr[1] + mArr[2] + mArr[3] + mArr[6] + mArr[7] + mArr[11])/6);
+				let SW_s = Math.round((mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13] + mArr[14])/6);
 				if(c_options.quantizer > 0){
 					left_third_large = Math.round((
 						mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[9] + mArr[12] + mArr[13]
@@ -2491,18 +2546,6 @@ function encoder(imageData,options){
 
 					let left = Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12])/4);
 					let right = Math.round((mArr[3] + mArr[7] + mArr[11] + mArr[15])/4);
-
-					let NW = mArr[0];
-					let SE = mArr[15];
-
-					let NE = mArr[3];
-					let SW = mArr[12];
-
-					let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
-					let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
-
-					let NE_s = Math.round((mArr[1] + mArr[2] + mArr[3] + mArr[6] + mArr[7] + mArr[11])/6);
-					let SW_s = Math.round((mArr[4] + mArr[8] + mArr[9] + mArr[12] + mArr[13] + mArr[14])/6);
 
 					let steep_NW = Math.round((mArr[0] + mArr[1] + mArr[4] + mArr[5] + mArr[8] + mArr[12])/6);
 					let steep_SE = Math.round((mArr[3] + mArr[7] + mArr[10] + mArr[11] + mArr[14] + mArr[15])/6);
@@ -2775,15 +2818,15 @@ function encoder(imageData,options){
 					))
 				}
 
-				let TOPLEFT_equal = mArr[0] === mArr[1] && mArr[0] === mArr[4] && mArr[0] === mArr[5];
+				/*let TOPLEFT_equal = mArr[0] === mArr[1] && mArr[0] === mArr[4] && mArr[0] === mArr[5];
 				let TOPRIGHT_equal = mArr[2] === mArr[3] && mArr[2] === mArr[6] && mArr[2] === mArr[7];
 				let BOTTOMLEFT_equal = mArr[8] === mArr[9] && mArr[8] === mArr[12] && mArr[8] === mArr[13];
-				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];
+				let BOTTOMRIGHT_equal = mArr[10] === mArr[11] && mArr[10] === mArr[14] && mArr[10] === mArr[15];*/
 
 
 				errorQueue.sort((a,b) => a.error - b.error || (b.symbol === "whole") - (a.symbol === "whole") || a.colours.length - b.colours.length);
 				if(errorQueue[0].error <= localQuantizer){
-					if(
+					/*if(
 						curr.size === 4
 						|| errorQueue[0].error === 0
 						|| table_ceiling < 10
@@ -2798,7 +2841,7 @@ function encoder(imageData,options){
 						|| (errorQueue[0].symbol === "horizontal_third" && (TOPRIGHT_equal && BOTTOMRIGHT_equal))
 						|| (errorQueue[0].symbol === "vertical_large_third" && (TOPLEFT_equal && TOPRIGHT_equal))
 						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
-					){
+					){*/
 						let nextPassed = true;
 						if(curr.size > 4 && errorQueue[0].error > localQuantizer * 0.8){
 							if(sharpener(
@@ -2819,6 +2862,42 @@ function encoder(imageData,options){
 							).error < errorQueue[0].error){
 								nextPassed = false
 							}
+							/*else if((sharpener(
+								NW_s,
+								SE,
+								(a,b) => create_diagonal_half_solid_dummy(a,b,0,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"diagonal_half_NW_dummy"
+							)).error < errorQueue[0].error){
+								nextPassed = false
+							}
+							else if((sharpener(
+								NE_s,
+								SW,
+								(a,b) => create_diagonal_half_solid_dummy(a,b,1,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"diagonal_half_NE_dummy"
+							)).error < errorQueue[0].error){
+								nextPassed = false
+							}
+							else if((sharpener(
+								SE_s,
+								NW,
+								(a,b) => create_diagonal_half_solid_dummy(a,b,2,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"diagonal_half_SE_dummy"
+							)).error < errorQueue[0].error){
+								nextPassed = false
+							}
+							else if((sharpener(
+								SW_s,
+								NE,
+								(a,b) => create_diagonal_half_solid_dummy(a,b,3,curr.size),
+								patch => error_compare(chunck,patch,curr.x,curr.y),
+								"diagonal_half_SW_dummy"
+							)).error < errorQueue[0].error){
+								nextPassed = false
+							}*/
 						}
 						if(nextPassed){
 							if(errorQueue[0].colours.length === 2 && errorQueue[0].colours[0] === errorQueue[0].colours[1]){
@@ -2855,7 +2934,7 @@ function encoder(imageData,options){
 							});
 							continue
 						}
-					}
+					//}
 				}
 				writeLargeSymbol("divide",curr.size === 4);
 				blockQueue.push({
