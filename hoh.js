@@ -2074,22 +2074,53 @@ function encoder(imageData,options){
 				}
 				let new_patch = resolver(new_a,b);
 				let new_error = errorFunction(new_patch);
+				let timesDown = false;
 				while(new_error < error){
+					timesDown = true;
 					a = new_a;
 					patch = new_patch;
 					error = new_error;
 					new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
 					new_error = errorFunction(resolver(new_a,b))
 				}
+				if(!timesDown){
+					diff = -diff;
+					new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+					new_patch = resolver(new_a,b);
+					new_error = errorFunction(new_patch);
+					while(new_error < error){
+						a = new_a;
+						patch = new_patch;
+						error = new_error;
+						new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+						new_error = errorFunction(resolver(new_a,b))
+					}
+				}
+
 				let new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
 				new_patch = resolver(a,new_b);
 				new_error = errorFunction(new_patch);
+				timesDown = false;
 				while(new_error < error){
+					timesDown = true;
 					b = new_b;
 					patch = new_patch;
 					error = new_error;
 					new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
 					new_error = errorFunction(resolver(a,new_b))
+				}
+				if(!timesDown){
+					diff = -diff;
+					new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+					new_patch = resolver(a,new_b);
+					new_error = errorFunction(new_patch);
+					while(new_error < error){
+						b = new_b;
+						patch = new_patch;
+						error = new_error;
+						new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+						new_error = errorFunction(resolver(a,new_b))
+					}
 				}
 			}
 			return {
@@ -2689,8 +2720,14 @@ function encoder(imageData,options){
 				let NW = mArr[0];
 				let SE = mArr[15];
 
+				let NW_for_g = Math.round((mArr[0] + mArr[1]/2 + mArr[4]/2)/2);
+				let SE_for_g = Math.round((mArr[15] + mArr[14]/2 + mArr[11]/2)/2);
+
 				let NE = mArr[3];
 				let SW = mArr[12];
+
+				let NE_for_g = Math.round((mArr[3] + mArr[2]/2 + mArr[7]/2)/2);
+				let SW_for_g = Math.round((mArr[12] + mArr[13]/2 + mArr[8]/2)/2);
 
 				let NW_s = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[4] + mArr[5] + mArr[8])/6);
 				let SE_s = Math.round((mArr[7] + mArr[10] + mArr[11] + mArr[13] + mArr[14] + mArr[15])/6);
@@ -2720,6 +2757,14 @@ function encoder(imageData,options){
 					bottom_third_large = Math.round((
 						mArr[8] + mArr[9] + mArr[10] + mArr[11] + mArr[12] + mArr[13] + mArr[14] + mArr[15]
 						 + mArr[4]/2 + mArr[5]/2 + mArr[6]/2 + mArr[7]/2
+					)/10);
+					let bottom_third_large_for_w = Math.round((
+						mArr[8] + mArr[9] + mArr[10] + mArr[11] + mArr[12] + mArr[13] + mArr[14] + mArr[15]
+						 + mArr[6] + mArr[7]
+					)/10);
+					let bottom_third_large_for_e = Math.round((
+						mArr[8] + mArr[9] + mArr[10] + mArr[11] + mArr[12] + mArr[13] + mArr[14] + mArr[15]
+						 + mArr[4] + mArr[5]
 					)/10);
 					let top = Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3])/4);
 					let bottom = Math.round((mArr[12] + mArr[13] + mArr[14] + mArr[15])/4);
@@ -2764,15 +2809,15 @@ function encoder(imageData,options){
 					))
 
 					errorQueue.push(sharpener(
-						NW,
-						SE,
+						NW_for_g,
+						SE_for_g,
 						(a,b) => create_diagonal_gradient(a,b,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_NW"
 					))
 					errorQueue.push(sharpener(
-						NE,
-						SW,
+						NE_for_g,
+						SW_for_g,
 						(a,b) => create_diagonal_gradient(a,b,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_NE"
@@ -2883,14 +2928,14 @@ function encoder(imageData,options){
 					))
 					errorQueue.push(sharpener(
 						NW,
-						bottom_third_large,
+						bottom_third_large_for_w,
 						(a,b) => create_edge_slope(a,b,0,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_0_NW"
 					))
 					errorQueue.push(sharpener(
 						NE,
-						bottom_third_large,
+						bottom_third_large_for_e,
 						(a,b) => create_edge_slope(a,b,0,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_0_NE"
