@@ -2115,11 +2115,39 @@ function encoder(imageData,options){
 					new_patch = resolver(a,new_b);
 					new_error = errorFunction(new_patch);
 					while(new_error < error){
+						timesDown = true;
 						b = new_b;
 						patch = new_patch;
 						error = new_error;
 						new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
 						new_error = errorFunction(resolver(a,new_b))
+					}
+				}
+				if(timesDown){
+					new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+					new_patch = resolver(new_a,b);
+					new_error = errorFunction(new_patch);
+					timesDown = false;
+					while(new_error < error){
+						timesDown = true;
+						a = new_a;
+						patch = new_patch;
+						error = new_error;
+						new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+						new_error = errorFunction(resolver(new_a,b))
+					}
+					if(!timesDown){
+						diff = -diff;
+						new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+						new_patch = resolver(new_a,b);
+						new_error = errorFunction(new_patch);
+						while(new_error < error){
+							a = new_a;
+							patch = new_patch;
+							error = new_error;
+							new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
+							new_error = errorFunction(resolver(new_a,b))
+						}
 					}
 				}
 			}
