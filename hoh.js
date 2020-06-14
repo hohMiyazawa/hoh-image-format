@@ -1854,9 +1854,9 @@ function encoder(imageData,options){
 			return Math.max(num - num*num/512,1)
 		}
 
-		if(c_options.name === "Co" || c_options.name === "Cg"){
+		if(c_options.name === "Co" || c_options.name === "Cg" || c_options.indexed || c_options.indexeda){
 			grower = function(num){
-				return 128
+				return CHANNEL_POWER/4
 			}
 		}
 
@@ -2065,7 +2065,7 @@ function encoder(imageData,options){
 		let sharpener = function(a,b,resolver,errorFunction,symbol){
 			let patch = resolver(a,b);
 			let error = errorFunction(patch);
-			if(options.forceGradients && c_options.quantizer){
+			if(options.forceGradients && c_options.quantizer && error){
 				let new_a = Math.min(a + 1,table_ceiling - 1);
 				let diff = 1;
 				if(a < b){
@@ -2123,7 +2123,7 @@ function encoder(imageData,options){
 						new_error = errorFunction(resolver(a,new_b))
 					}
 				}
-				if(timesDown){
+				while(timesDown){
 					new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
 					new_patch = resolver(new_a,b);
 					new_error = errorFunction(new_patch);
@@ -2142,11 +2142,40 @@ function encoder(imageData,options){
 						new_patch = resolver(new_a,b);
 						new_error = errorFunction(new_patch);
 						while(new_error < error){
+							timesDown = true;
 							a = new_a;
 							patch = new_patch;
 							error = new_error;
 							new_a = Math.min(table_ceiling - 1,Math.max(a + diff,0));
 							new_error = errorFunction(resolver(new_a,b))
+						}
+					}
+					if(timesDown){
+						new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+						new_patch = resolver(a,new_b);
+						new_error = errorFunction(new_patch);
+						timesDown = false;
+						while(new_error < error){
+							timesDown = true;
+							b = new_b;
+							patch = new_patch;
+							error = new_error;
+							new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+							new_error = errorFunction(resolver(a,new_b))
+						}
+						if(!timesDown){
+							diff = -diff;
+							new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+							new_patch = resolver(a,new_b);
+							new_error = errorFunction(new_patch);
+							while(new_error < error){
+								timesDown = true;
+								b = new_b;
+								patch = new_patch;
+								error = new_error;
+								new_b = Math.min(table_ceiling - 1,Math.max(b - diff,0));
+								new_error = errorFunction(resolver(a,new_b))
+							}
 						}
 					}
 				}
@@ -2835,7 +2864,6 @@ function encoder(imageData,options){
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"horizontal"
 					))
-
 					errorQueue.push(sharpener(
 						NW_for_g,
 						SE_for_g,
@@ -2868,28 +2896,28 @@ function encoder(imageData,options){
 
 					errorQueue.push(sharpener(
 						NW_s,
-						SE,
+						Math.min(table_ceiling - 1,Math.max(0,Math.round((SE + (mArr[14] + mArr[11]) - (mArr[13] + mArr[10] + mArr[7])/3)/2))),
 						(a,b) => create_diagonal_half_solid(a,b,0,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_half_NW"
 					))
 					errorQueue.push(sharpener(
 						NE_s,
-						SW,
+						Math.min(table_ceiling - 1,Math.max(0,Math.round((SW + (mArr[13] + mArr[8]) - (mArr[4] + mArr[9] + mArr[14])/3)/2))),
 						(a,b) => create_diagonal_half_solid(a,b,1,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_half_NE"
 					))
 					errorQueue.push(sharpener(
 						SE_s,
-						NW,
+						Math.min(table_ceiling - 1,Math.max(0,Math.round((NW + (mArr[1] + mArr[4]) - (mArr[2] + mArr[5] + mArr[8])/3)/2))),
 						(a,b) => create_diagonal_half_solid(a,b,2,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_half_SE"
 					))
 					errorQueue.push(sharpener(
 						SW_s,
-						NE,
+						Math.min(table_ceiling - 1,Math.max(0,Math.round((NE + (mArr[2] + mArr[7]) - (mArr[1] + mArr[6] + mArr[11])/3)/2))),
 						(a,b) => create_diagonal_half_solid(a,b,3,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"diagonal_half_SW"
@@ -2955,56 +2983,56 @@ function encoder(imageData,options){
 						"slanted_NE_calm"
 					))
 					errorQueue.push(sharpener(
-						NW,
+						Math.round((mArr[0] + mArr[1])/2),
 						bottom_third_large_for_w,
 						(a,b) => create_edge_slope(a,b,0,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_0_NW"
 					))
 					errorQueue.push(sharpener(
-						NE,
+						Math.round((mArr[2] + mArr[3])/2),
 						bottom_third_large_for_e,
 						(a,b) => create_edge_slope(a,b,0,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_0_NE"
 					))
 					errorQueue.push(sharpener(
-						SE,
+						Math.round((mArr[11] + mArr[15])/2),
 						left_third_large,
 						(a,b) => create_edge_slope(a,b,1,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_1_NW"
 					))
 					errorQueue.push(sharpener(
-						NE,
+						Math.round((mArr[3] + mArr[7])/2),
 						left_third_large,
 						(a,b) => create_edge_slope(a,b,1,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_1_NE"
 					))
 					errorQueue.push(sharpener(
-						SE,
+						Math.round((mArr[14] + mArr[15])/2),
 						top_third_large,
 						(a,b) => create_edge_slope(a,b,2,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_2_NW"
 					))
 					errorQueue.push(sharpener(
-						SW,
+						Math.round((mArr[12] + mArr[13])/2),
 						top_third_large,
 						(a,b) => create_edge_slope(a,b,2,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_2_NE"
 					))
 					errorQueue.push(sharpener(
-						NW,
+						Math.round((mArr[0] + mArr[4])/2),
 						right_third_large,
 						(a,b) => create_edge_slope(a,b,3,false,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"edge_slope_3_NW"
 					))
 					errorQueue.push(sharpener(
-						SW,
+						Math.round((mArr[8] + mArr[12])/2),
 						right_third_large,
 						(a,b) => create_edge_slope(a,b,3,true,curr.size),
 						patch => error_compare(chunck,patch,curr.x,curr.y),
@@ -3026,27 +3054,29 @@ function encoder(imageData,options){
 							"dct10"
 						))
 						errorQueue.push(sharpener(
-							...asample_dct(chunck,0,3),
+							Math.round((mArr[0] + mArr[1] + mArr[2] + mArr[3] + mArr[8] + mArr[9] + mArr[10] + mArr[11])/8),
+							Math.round((mArr[4] + mArr[5] + mArr[6] + mArr[7] + mArr[12] + mArr[13] + mArr[14] + mArr[15])/8),
 							(a,b) => create_dct(a,b,0,3,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct03"
 						))
 						errorQueue.push(sharpener(
-							...asample_dct(chunck,3,0),
+							Math.round((mArr[0] + mArr[4] + mArr[8] + mArr[12] + mArr[1] + mArr[5] + mArr[9] + mArr[13])/8),
+							Math.round((mArr[2] + mArr[6] + mArr[10] + mArr[14] + mArr[3] + mArr[7] + mArr[11] + mArr[15])/8),
 							(a,b) => create_dct(a,b,3,0,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct30"
 						))
 
 						errorQueue.push(sharpener(
-							top,
+							Math.round((top + bottom)/2),
 							middle_horizontal,
 							(a,b) => create_dct(a,b,0,2,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct02"
 						))
 						errorQueue.push(sharpener(
-							left,
+							Math.round((left + right)/2),
 							middle_vertical,
 							(a,b) => create_dct(a,b,2,0,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
@@ -3085,8 +3115,8 @@ function encoder(imageData,options){
 							"dct33"
 						))
 						errorQueue.push(sharpener(
-							corner_NW_SE,
-							corner_NE_SW,
+							Math.round((mArr[0] + mArr[1] + mArr[7] + mArr[11] + mArr[12] + mArr[13])/6),
+							Math.round((mArr[3] + mArr[4] + mArr[8] + mArr[15])/4),
 							(a,b) => create_dct(a,b,1,2,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct12"
@@ -3098,8 +3128,8 @@ function encoder(imageData,options){
 							"dct13"
 						))
 						errorQueue.push(sharpener(
-							corner_NW_SE,
-							corner_NE_SW,
+							Math.round((mArr[0] + mArr[3] + mArr[1] + mArr[7] + mArr[13] + mArr[14])/6),
+							Math.round((mArr[12] + mArr[1] + mArr[2] + mArr[15])/4),
 							(a,b) => create_dct(a,b,2,1,curr.size),
 							patch => error_compare(chunck,patch,curr.x,curr.y),
 							"dct21"
@@ -3926,7 +3956,8 @@ function encoder(imageData,options){
 			IMap = currentEncode.map(row => row.map(val => inverseTranslation[val]));
 			IMapDepth = CHANNEL_POWER
 		}
-
+		//console.log(Object.keys(sharpenerCount).map((val,index) => val + " " + (sharpenerSum[val]/sharpenerCount[val])));
+		//console.log(Object.keys(sharpenerSum).map(val => sharpenerSum[val]).reduce((acc,val) => acc + val,0))
 		return bitBuffer
 	}
 
