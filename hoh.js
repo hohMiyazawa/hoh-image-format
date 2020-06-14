@@ -1161,6 +1161,168 @@ function create_diagonal_half_solid_dummy(colour1,colour2,direction,size){
 	return data
 }
 
+function create_slanted_gradient(colour1,colour2,direction,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(direction === 0){
+				col.push(Math.round(colour1 + (colour2 - colour1) * (j + 2*i)/(size + 2*size - 3)))
+			}
+			else if(direction === 1){
+				col.push(Math.round(colour1 + (colour2 - colour1) * (j + 2*(size - i - 1))/(size + 2*size - 3)))
+			}
+			else if(direction === 2){
+				col.push(Math.round(colour1 + (colour2 - colour1) * (2*j + i)/(size + 2*size - 3)))
+			}
+			else{
+				col.push(Math.round(colour1 + (colour2 - colour1) * (2*j + (size - i - 1))/(size + 2*size - 3)))
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
+function create_edge_slope(colour1,colour2,quadrant,direction,size){
+	let data = []
+	for(let i=0;i<size;i++){
+		let col = [];
+		for(let j=0;j<size;j++){
+			if(quadrant === 0){
+				if(direction){
+					if(j < size/2){
+						if(
+							(size - i - 1) + j*2 < size
+						){
+							col.push(colour1)
+						}
+						else{
+							col.push(colour2)
+						}
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+				else{
+					if(j < size/2){
+						if(
+							i + j*2 < size
+						){
+							col.push(colour1)
+						}
+						else{
+							col.push(colour2)
+						}
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+			}
+			else if(quadrant === 1){
+				if(direction){
+					if(i < size/2){
+						col.push(colour2)
+					}
+					else{
+						if(
+							(size - i - 1)*2 + j < size
+						){
+							col.push(colour1)
+						}
+						else{
+							col.push(colour2)
+						}
+					}
+				}
+				else{
+					if(i < size/2){
+						col.push(colour2)
+					}
+					else{
+						if(
+							(i - size/2)*2 + j < size
+						){
+							col.push(colour2)
+						}
+						else{
+							col.push(colour1)
+						}
+					}
+				}
+			}
+			else if(quadrant === 2){
+				if(direction){
+					if(j < size/2){
+						col.push(colour2)
+					}
+					else{
+						if(
+							(size - i - 1) + (j - size/2)*2 < size
+						){
+							col.push(colour2)
+						}
+						else{
+							col.push(colour1)
+						}
+					}
+				}
+				else{
+					if(j < size/2){
+						col.push(colour2)
+					}
+					else{
+						if(
+							i + (j - size/2)*2 < size
+						){
+							col.push(colour2)
+						}
+						else{
+							col.push(colour1)
+						}
+					}
+				}
+			}
+			else{
+				if(direction){
+					if(i < size/2){
+						if(
+							(size/2 - i - 1)*2 + j < size
+						){
+							col.push(colour2)
+						}
+						else{
+							col.push(colour1)
+						}
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+				else{
+					if(i < size/2){
+						if(
+							i*2 + j < size
+						){
+							col.push(colour1)
+						}
+						else{
+							col.push(colour2)
+						}
+					}
+					else{
+						col.push(colour2)
+					}
+				}
+			}
+		}
+		data.push(col)
+	}
+	return data
+}
+
 
 function create_odd_solid(colour1,colour2,direction,steep,size){
 	let data = []
@@ -1380,6 +1542,10 @@ const largeSymbolTable = [
 	"calm_NE",
 	"dip_NW",
 	"dip_NE",
+	"slanted_NW_steep",
+	"slanted_NE_steep",
+	"slanted_NW_calm",
+	"slanted_NE_calm",
 	"horizontal_third",
 	"horizontal_large_third",
 	"vertical_third",
@@ -1412,7 +1578,15 @@ const largeSymbolTable = [
 	"diagonal_half_NW",
 	"diagonal_half_NE",
 	"diagonal_half_SE",
-	"diagonal_half_SW"
+	"diagonal_half_SW",
+	"edge_slope_0_NW",
+	"edge_slope_0_NE",
+	"edge_slope_1_NW",
+	"edge_slope_1_NE",
+	"edge_slope_2_NW",
+	"edge_slope_2_NE",
+	"edge_slope_3_NW",
+	"edge_slope_3_NE"
 ]
 
 const internal_formats = [
@@ -2679,6 +2853,90 @@ function encoder(imageData,options){
 						patch => error_compare(chunck,patch,curr.x,curr.y),
 						"calm_NE"
 					))
+					errorQueue.push(sharpener(
+						steep_NW,
+						steep_SE,
+						(a,b) => create_slanted_gradient(a,b,0,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"slanted_NW_steep"
+					))
+					errorQueue.push(sharpener(
+						steep_NE,
+						steep_SW,
+						(a,b) => create_slanted_gradient(a,b,1,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"slanted_NE_steep"
+					))
+					errorQueue.push(sharpener(
+						calm_NW,
+						calm_SE,
+						(a,b) => create_slanted_gradient(a,b,2,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"slanted_NW_calm"
+					))
+					errorQueue.push(sharpener(
+						calm_NE,
+						calm_SW,
+						(a,b) => create_slanted_gradient(a,b,3,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"slanted_NE_calm"
+					))
+					errorQueue.push(sharpener(
+						NW,
+						bottom_third_large,
+						(a,b) => create_edge_slope(a,b,0,false,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_0_NW"
+					))
+					errorQueue.push(sharpener(
+						NE,
+						bottom_third_large,
+						(a,b) => create_edge_slope(a,b,0,true,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_0_NE"
+					))
+					errorQueue.push(sharpener(
+						SE,
+						left_third_large,
+						(a,b) => create_edge_slope(a,b,1,false,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_1_NW"
+					))
+					errorQueue.push(sharpener(
+						NE,
+						left_third_large,
+						(a,b) => create_edge_slope(a,b,1,true,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_1_NE"
+					))
+					errorQueue.push(sharpener(
+						SE,
+						top_third_large,
+						(a,b) => create_edge_slope(a,b,2,false,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_2_NW"
+					))
+					errorQueue.push(sharpener(
+						SW,
+						top_third_large,
+						(a,b) => create_edge_slope(a,b,2,true,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_2_NE"
+					))
+					errorQueue.push(sharpener(
+						NW,
+						right_third_large,
+						(a,b) => create_edge_slope(a,b,3,false,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_3_NW"
+					))
+					errorQueue.push(sharpener(
+						SW,
+						right_third_large,
+						(a,b) => create_edge_slope(a,b,3,true,curr.size),
+						patch => error_compare(chunck,patch,curr.x,curr.y),
+						"edge_slope_3_NE"
+					))
 					if(options.useDCT){
 						errorQueue.push(sharpener(
 							top,
@@ -2843,10 +3101,18 @@ function encoder(imageData,options){
 							|| (TOPRIGHT_equal && BOTTOMRIGHT_equal)
 							|| (TOPLEFT_equal && BOTTOMLEFT_equal)
 						)
-						|| (errorQueue[0].symbol === "horizontal_large_third" && (TOPLEFT_equal && BOTTOMLEFT_equal))
-						|| (errorQueue[0].symbol === "horizontal_third" && (TOPRIGHT_equal && BOTTOMRIGHT_equal))
-						|| (errorQueue[0].symbol === "vertical_large_third" && (TOPLEFT_equal && TOPRIGHT_equal))
-						|| (errorQueue[0].symbol === "vertical_third" && (BOTTOMLEFT_equal && BOTTOMRIGHT_equal))
+						|| (["horizontal_large_third","edge_slope_1_NW","edge_slope_1_NE"].includes(errorQueue[0].symbol)
+							&& (TOPLEFT_equal && BOTTOMLEFT_equal)
+						)
+						|| (["horizontal_third","edge_slope_3_NW","edge_slope_3_NE"].includes(errorQueue[0].symbol)
+							&& (TOPRIGHT_equal && BOTTOMRIGHT_equal)
+						)
+						|| (["vertical_large_third","edge_slope_2_NW","edge_slope_2_NE"].includes(errorQueue[0].symbol)
+							&& (TOPLEFT_equal && TOPRIGHT_equal)
+						)
+						|| (["vertical_third","edge_slope_0_NW","edge_slope_0_NE"].includes(errorQueue[0].symbol)
+							&& (BOTTOMLEFT_equal && BOTTOMRIGHT_equal)
+						)
 					){
 						let nextPassed = true;
 						if(errorQueue[0].error > localQuantizer * 0.8){
@@ -5118,6 +5384,22 @@ function decoder(hohData,options){
 							}
 						}
 					}
+					else if(instruction === "slanted_NW_steep" || instruction === "slanted_NE_steep" || instruction === "slanted_NW_calm" || instruction === "slanted_NE_calm"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_slanted_gradient(colour1,colour2,["slanted_NW_steep","slanted_NE_steep","slanted_NW_calm","slanted_NE_calm"].indexOf(instruction),curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y];
+							}
+						}
+					}
 					else if(instruction === "dip_NW"){
 						let colour1 = readColour();
 						let colour2;
@@ -5208,6 +5490,134 @@ function decoder(hohData,options){
 							colour2 = readColour()
 						}
 						let patch = create_third(colour1,colour2,true,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_0_NW"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,0,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_0_NE"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,0,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_1_NW"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,1,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_1_NE"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,1,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_2_NW"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,2,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_2_NE"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,2,true,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_3_NW"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,3,false,curr.size);
+						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
+							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
+								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
+							}
+						}
+					}
+					else if(instruction === "edge_slope_3_NE"){
+						let colour1 = readColour();
+						let colour2;
+						if(table_ceiling === 2){
+							colour2 = +!colour1
+						}
+						else{
+							colour2 = readColour()
+						}
+						let patch = create_edge_slope(colour1,colour2,3,true,curr.size);
 						for(let i=curr.x;(i<curr.x + curr.size) && i < width;i++){
 							for(let j=curr.y;(j<curr.y + curr.size) && j < height;j++){
 								currentEncode[i][j] = patch[i - curr.x][j - curr.y]
