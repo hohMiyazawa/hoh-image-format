@@ -2055,8 +2055,8 @@ function encoder(imageData,options){
 				smallSymbolFrequency[symbol]++
 			}
 		}
-		let writeLargeSymbol = function(symbol){
-			aritmetic_queue.push({size: "large",symbol: symbol});
+		let writeLargeSymbol = function(symbol,width){
+			aritmetic_queue.push({size: "large",symbol: symbol,width: width});
 			largeSymbolFrequency[symbol]++
 		}
 		let writeByte = function(integer){
@@ -2315,7 +2315,7 @@ function encoder(imageData,options){
 					&& channelData[curr.x][curr.y] !== channelData[curr.x + 1][curr.y + 1]
 				)
 			){
-				writeLargeSymbol("divide",curr.size === 4);
+				writeLargeSymbol("divide",curr.size);
 				blockQueue.push({
 					x: curr.x,
 					y: curr.y,
@@ -3312,11 +3312,11 @@ function encoder(imageData,options){
 						}
 						if(nextPassed){
 							if(errorQueue[0].colours.length === 2 && errorQueue[0].colours[0] === errorQueue[0].colours[1]){
-								writeLargeSymbol("whole");
+								writeLargeSymbol("whole",curr.size);
 								writeByte(errorQueue[0].colours[0])
 							}
 							else{
-								writeLargeSymbol(errorQueue[0].symbol);
+								writeLargeSymbol(errorQueue[0].symbol,curr.size);
 								if(table_ceiling === 2){
 									if(errorQueue[0].colours.length){
 										writeByte(errorQueue[0].colours[0])
@@ -3347,7 +3347,7 @@ function encoder(imageData,options){
 						}
 					}
 				}
-				writeLargeSymbol("divide",curr.size === 4);
+				writeLargeSymbol("divide",curr.size);
 				blockQueue.push({
 					x: curr.x,
 					y: curr.y,
@@ -3728,6 +3728,8 @@ function encoder(imageData,options){
 		let previousWas = false;
 		let previousWas_large = false;
 
+		let local_p = new Array(table_ceiling).fill(1);
+
 		let lumaMap_data = [];
 		for(let i=0;i<256;i++){
 			lumaMap_data.push(new Array(table_ceiling).fill(1));
@@ -3789,7 +3791,7 @@ function encoder(imageData,options){
 						}
 
 						let localProbability = absolutes.map((val,index) => {
-							return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+							return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
 						})
 						if(previousWas.symbol === "pixels"){
 							if(pixelTrace.length === 3){
@@ -3851,7 +3853,7 @@ function encoder(imageData,options){
 						else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
-						else if(pixelTrace.length && previousWas_large && previousWas_large !== "whole"){
+						else if(pixelTrace.length && previousWas_large && previousWas_large.symbol !== "whole"){
 							localProbability[pixelTrace[0]] = 0
 						}
 						let c_tot = localProbability.reduce((acc,val) => acc + val,0);
@@ -3866,13 +3868,17 @@ function encoder(imageData,options){
 						forige = waiting;
 						deltas[encodedInteger]++;
 						absolutes[waiting]++;
+						local_p[waiting]++;
 						pixelTrace.push(waiting);
 					}
 				}
 				else if(waiting.size === "large"){
 					pixelTrace = [];
 					previousWas = false;
-					previousWas_large = waiting.symbol;
+					previousWas_large = waiting;
+					if(waiting.width >= 64){
+						local_p = new Array(table_ceiling).fill(1);
+					}
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
 					if(DEBUG_large_f.get(forigeg_large) > 128){
 						enc.write(predictionGrid_large[forigeg_large],symbol)
@@ -4614,11 +4620,13 @@ function decoder(hohData,options){
 
 			let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader);
 
+			let local_p = new Array(table_ceiling).fill(1);
+
 			let pixelTrace = [];
 			let previousWas = false;
 			let previousWas_large = false;
 
-			let readLargeSymbol = function(){
+			let readLargeSymbol = function(size){
 				previousWas = false;
 				pixelTrace = [];
 				let symbol;
@@ -4632,6 +4640,9 @@ function decoder(hohData,options){
 				predictionGrid_large[forigeg_large].increment(symbol);
 				forigeg_large = symbol;
 				previousWas_large = largeSymbolTable[symbol];
+				if(size >= 64){
+					local_p = new Array(table_ceiling).fill(1)
+				}
 				return previousWas_large
 			}
 
@@ -4689,10 +4700,11 @@ function decoder(hohData,options){
 			let absolutes = new Array(table_ceiling).fill(1);
 			let deltas = new Array(table_ceiling).fill(1);
 
+
 			let readColour = function(){
 				
 				let localProbability = absolutes.map((val,index) => {
-					return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+					return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
 				})
 				if(previousWas.symbol === "pixels"){
 					if(pixelTrace.length === 3){
@@ -4728,7 +4740,8 @@ function decoder(hohData,options){
 				forige = symbol;
 				deltas[encodedInteger]++;
 				absolutes[symbol]++;
-				pixelTrace.push(symbol)
+				pixelTrace.push(symbol);
+				local_p[symbol]++
 				return symbol
 			}
 
@@ -4755,7 +4768,7 @@ function decoder(hohData,options){
 				readColour = function(){
 					
 					let localProbability = absolutes.map((val,index) => {
-						return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+						return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
 					})
 					let curr_luma;
 					if(previousWas.symbol === "pixels"){
@@ -4811,6 +4824,7 @@ function decoder(hohData,options){
 					if(previousWas.symbol === "pixels"){
 						lumaMap_data[curr_luma][symbol]++
 					}
+					local_p[symbol]++
 					return symbol
 				}
 			}
@@ -4841,7 +4855,7 @@ function decoder(hohData,options){
 				readColour = function(){
 					
 					let localProbability = absolutes.map((val,index) => {
-						return Math.round(Math.sqrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling])
+						return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
 					})
 					let curr_luma;
 					let curr_I;
@@ -4903,6 +4917,7 @@ function decoder(hohData,options){
 						lumaMap_data[curr_luma][symbol]++;
 						IMap_data[curr_I][symbol]++
 					}
+					local_p[symbol]++
 					return symbol
 				}
 			}
@@ -5013,7 +5028,7 @@ function decoder(hohData,options){
 							previous32x32_curr.shift()
 						}
 					}
-					let instruction = readLargeSymbol();
+					let instruction = readLargeSymbol(curr.size);
 					if(instruction === "divide"){
 						blockQueue.push({
 							x: curr.x,
