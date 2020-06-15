@@ -3729,6 +3729,7 @@ function encoder(imageData,options){
 		let previousWas_large = false;
 
 		let local_p = new Array(table_ceiling).fill(1);
+		let local_area = new Array(table_ceiling).fill(1);
 
 		let lumaMap_data = [];
 		for(let i=0;i<256;i++){
@@ -3791,7 +3792,7 @@ function encoder(imageData,options){
 						}
 
 						let localProbability = absolutes.map((val,index) => {
-							return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
+							return Math.round(Math.cbrt(val) * Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95) * Math.cbrt(local_p[index]) * Math.cbrt(local_area[index]))
 						})
 						if(previousWas.symbol === "pixels"){
 							if(pixelTrace.length === 3){
@@ -3869,6 +3870,7 @@ function encoder(imageData,options){
 						deltas[encodedInteger]++;
 						absolutes[waiting]++;
 						local_p[waiting]++;
+						local_area[waiting]++;
 						pixelTrace.push(waiting);
 					}
 				}
@@ -3878,6 +3880,9 @@ function encoder(imageData,options){
 					previousWas_large = waiting;
 					if(waiting.width >= 64){
 						local_p = new Array(table_ceiling).fill(1);
+					}
+					if(waiting.width >= 16){
+						local_area = new Array(table_ceiling).fill(1);
 					}
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
 					if(DEBUG_large_f.get(forigeg_large) > 128){
@@ -4621,6 +4626,7 @@ function decoder(hohData,options){
 			let dec = new ArithmeticDecoder(NUM_OF_BITS, testreader);
 
 			let local_p = new Array(table_ceiling).fill(1);
+			let local_area = new Array(table_ceiling).fill(1);
 
 			let pixelTrace = [];
 			let previousWas = false;
@@ -4642,6 +4648,9 @@ function decoder(hohData,options){
 				previousWas_large = largeSymbolTable[symbol];
 				if(size >= 64){
 					local_p = new Array(table_ceiling).fill(1)
+				}
+				if(size >= 16){
+					local_area = new Array(table_ceiling).fill(1)
 				}
 				return previousWas_large
 			}
@@ -4704,7 +4713,7 @@ function decoder(hohData,options){
 			let readColour = function(){
 				
 				let localProbability = absolutes.map((val,index) => {
-					return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
+					return Math.round(Math.cbrt(val) * Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95) * Math.cbrt(local_p[index]) * Math.cbrt(local_area[index]))
 				})
 				if(previousWas.symbol === "pixels"){
 					if(pixelTrace.length === 3){
@@ -4742,6 +4751,7 @@ function decoder(hohData,options){
 				absolutes[symbol]++;
 				pixelTrace.push(symbol);
 				local_p[symbol]++
+				local_area[symbol]++
 				return symbol
 			}
 
@@ -4768,7 +4778,7 @@ function decoder(hohData,options){
 				readColour = function(){
 					
 					let localProbability = absolutes.map((val,index) => {
-						return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
+						return Math.round(Math.cbrt(val) * Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95) * Math.cbrt(local_p[index]) * Math.cbrt(local_area[index]))
 					})
 					let curr_luma;
 					if(previousWas.symbol === "pixels"){
@@ -4825,6 +4835,7 @@ function decoder(hohData,options){
 						lumaMap_data[curr_luma][symbol]++
 					}
 					local_p[symbol]++
+					local_area[symbol]++
 					return symbol
 				}
 			}
@@ -4855,7 +4866,7 @@ function decoder(hohData,options){
 				readColour = function(){
 					
 					let localProbability = absolutes.map((val,index) => {
-						return Math.round(Math.cbrt(val) * deltas[(index - forige + table_ceiling) % table_ceiling] * Math.cbrt(local_p[index]))
+						return Math.round(Math.cbrt(val) * Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95) * Math.cbrt(local_p[index]) * Math.cbrt(local_area[index]))
 					})
 					let curr_luma;
 					let curr_I;
@@ -4918,6 +4929,7 @@ function decoder(hohData,options){
 						IMap_data[curr_I][symbol]++
 					}
 					local_p[symbol]++
+					local_area[symbol]++
 					return symbol
 				}
 			}
