@@ -3766,6 +3766,11 @@ function encoder(imageData,options){
 			}
 		}
 
+		let lumaMap_data_local = [];
+		for(let i=0;i<256;i++){
+			lumaMap_data_local.push(new Array(table_ceiling).fill(1));
+		}
+
 		let IMap_data = [];
 		for(let i=0;i<IMapDepth;i++){
 			IMap_data.push(new Array(table_ceiling).fill(1))
@@ -3792,7 +3797,12 @@ function encoder(imageData,options){
 						}
 
 						let localProbability = absolutes.map((val,index) => {
-							return Math.round(Math.cbrt(val) * Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95) * Math.cbrt(local_p[index]) * Math.cbrt(local_area[index]))
+							return Math.round(
+								Math.cbrt(val)
+								* Math.pow(deltas[(index - forige + table_ceiling) % table_ceiling],0.95)
+								* Math.cbrt(local_p[index])
+								* Math.cbrt(local_area[index])
+							)
 						})
 						if(previousWas.symbol === "pixels"){
 							if(pixelTrace.length === 3){
@@ -3839,16 +3849,26 @@ function encoder(imageData,options){
 										curr_I = IMap[previousWas.x][previousWas.y + 1]
 									}
 									localProbability = localProbability.map((val,index) => {
-										return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]) * Math.cbrt(IMap_data[curr_I][index]))
+										return Math.round(
+											Math.pow(val,0.9)
+											* Math.cbrt(lumaMap_data[curr_luma][index])
+											* Math.cbrt(lumaMap_data_local[curr_luma][index])
+											* Math.cbrt(IMap_data[curr_I][index])
+										)
 									});
 									IMap_data[curr_I][waiting]++
 								}
 								else{
 									localProbability = localProbability.map((val,index) => {
-										return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
+										return Math.round(
+											Math.pow(val,0.9)
+											* Math.cbrt(lumaMap_data[curr_luma][index])
+											* Math.cbrt(lumaMap_data_local[curr_luma][index])
+										)
 									})
 								}
-								lumaMap_data[curr_luma][waiting]++
+								lumaMap_data[curr_luma][waiting]++;
+								lumaMap_data_local[curr_luma][waiting]++
 							}
 						}
 						else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
@@ -3880,9 +3900,13 @@ function encoder(imageData,options){
 					previousWas_large = waiting;
 					if(waiting.width >= 64){
 						local_p = new Array(table_ceiling).fill(1);
+						lumaMap_data_local = [];
+						for(let i=0;i<256;i++){
+							lumaMap_data_local.push(new Array(table_ceiling).fill(1));
+						}
 					}
 					if(waiting.width >= 16){
-						local_area = new Array(table_ceiling).fill(1);
+						local_area = new Array(table_ceiling).fill(1)
 					}
 					let symbol = largeSymbolTable.indexOf(waiting.symbol);
 					if(DEBUG_large_f.get(forigeg_large) > 128){
@@ -4632,6 +4656,13 @@ function decoder(hohData,options){
 			let previousWas = false;
 			let previousWas_large = false;
 
+			let lumaMap_data_local = [];
+			if(options.name === "I" || options.name === "Co" || options.name === "Q" || options.name === "Cg"){
+				for(let i=0;i<256;i++){
+					lumaMap_data_local.push(new Array(table_ceiling).fill(1));
+				}
+			}
+
 			let readLargeSymbol = function(size){
 				previousWas = false;
 				pixelTrace = [];
@@ -4647,7 +4678,13 @@ function decoder(hohData,options){
 				forigeg_large = symbol;
 				previousWas_large = largeSymbolTable[symbol];
 				if(size >= 64){
-					local_p = new Array(table_ceiling).fill(1)
+					local_p = new Array(table_ceiling).fill(1);
+					if(options.name === "I" || options.name === "Co" || options.name === "Q" || options.name === "Cg"){
+						lumaMap_data_local = [];
+						for(let i=0;i<256;i++){
+							lumaMap_data_local.push(new Array(table_ceiling).fill(1));
+						}
+					}
 				}
 				if(size >= 16){
 					local_area = new Array(table_ceiling).fill(1)
@@ -4810,7 +4847,11 @@ function decoder(hohData,options){
 							curr_luma = lumaMap[previousWas.x][previousWas.y + 1]
 						}
 						localProbability = localProbability.map((val,index) => {
-							return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]))
+							return Math.round(
+								Math.pow(val,0.9)
+								* Math.cbrt(lumaMap_data[curr_luma][index])
+								* Math.cbrt(lumaMap_data_local[curr_luma][index])
+							)
 						})
 					}
 					else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
@@ -4832,7 +4873,8 @@ function decoder(hohData,options){
 					absolutes[symbol]++;
 					pixelTrace.push(symbol);
 					if(previousWas.symbol === "pixels"){
-						lumaMap_data[curr_luma][symbol]++
+						lumaMap_data[curr_luma][symbol]++;
+						lumaMap_data_local[curr_luma][symbol]++
 					}
 					local_p[symbol]++
 					local_area[symbol]++
@@ -4903,7 +4945,11 @@ function decoder(hohData,options){
 							curr_I = IMap[previousWas.x][previousWas.y + 1]
 						}
 						localProbability = localProbability.map((val,index) => {
-							return Math.round(Math.pow(val,0.9) * Math.sqrt(lumaMap_data[curr_luma][index]) * Math.cbrt(IMap_data[curr_I][index]))
+							return Math.round(
+								Math.pow(val,0.9)
+								* Math.cbrt(lumaMap_data[curr_luma][index])
+								* Math.cbrt(lumaMap_data_local[curr_luma][index])
+								* Math.cbrt(IMap_data[curr_I][index]))
 						})
 					}
 					else if(pixelTrace.length && previousWas && previousWas.symbol !== "whole"){
@@ -4926,6 +4972,7 @@ function decoder(hohData,options){
 					pixelTrace.push(symbol);
 					if(previousWas.symbol === "pixels"){
 						lumaMap_data[curr_luma][symbol]++;
+						lumaMap_data_local[curr_luma][symbol]++;
 						IMap_data[curr_I][symbol]++
 					}
 					local_p[symbol]++
