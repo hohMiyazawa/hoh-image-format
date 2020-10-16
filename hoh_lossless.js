@@ -76,6 +76,7 @@ let lossless_encoder = function(data,info,options){
 			info.pixelFormat = "yiq";
 		}
 	}
+	console.info("Colour transforms performed");
 
 	let encodedData = [];
 	let bitBuffer = [];
@@ -110,6 +111,8 @@ let lossless_encoder = function(data,info,options){
 	writeBitNative(0);
 	writeBitNative(0);
 
+	console.info("Header written");
+
 	let encodingQueue = [];
 	let blockQueue = [{size: encoding_size,x:0,y:0}];
 	let partitionBits = [];
@@ -124,13 +127,103 @@ let lossless_encoder = function(data,info,options){
 	}
 	bitBuffer.push(...partitionBits);
 
+	console.info("Partition performed");
+
+	let moduleData;
 	if(info.pixelFormat === "yiq"){
 		let channels = deSerialize(data,3);
+		moduleData = encodingQueue.map(module => {
+			console.info("Starting Y...");
+			let Y_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 256,name: "Y",width: width,height: height},
+				options,
+				{}
+			)
+			console.info("Starting I...");
+			let I_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 511,name: "I",width: width,height: height},
+				options,
+				{}
+			)
+			console.info("Starting Q...");
+			let Q_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 511,name: "Q",width: width,height: height},
+				options,
+				{}
+			)
+			return Y_data.concat(I_data).concat(Q_data)
+		})
 	}
 	else if(info.pixelFormat === "yiqa"){
 		let channels = deSerialize(data,4);
 	}
+	else if(info.pixelFormat === "rgb"){
+		let channels = deSerialize(data,3);
+		moduleData = encodingQueue.map(module => {
+			console.info("Starting R...");
+			let R_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 256,name: "R",width: width,height: height},
+				options,
+				{}
+			)
+			console.info("Starting G...");
+			let G_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 256,name: "G",width: width,height: height},
+				options,
+				{}
+			)
+			console.info("Starting B...");
+			let B_data = encodeChannel_lossless(
+				getPatch(
+					channels[0],width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 256,name: "B",width: width,height: height},
+				options,
+				{}
+			)
+			return R_data.concat(G_data).concat(B_data)
+		})
+	}
 
+	console.info("Modules compressed");
+
+	if(options.interleave){
+		throw "interleaving not supported yet"
+	}
+	else{
+		moduleData.forEach(module => {
+			module.forEach(byte => writeByteNative(byte))
+		})
+	}
+
+	console.info("Data joined");
 
 	while(bitBuffer.length % BYTE_LENGTH){
 		bitBuffer.push(0);
@@ -224,8 +317,46 @@ let lossless_decoder = function(data,info,options){
 		partitionBitsRead++;
 		readBit()
 	}
+
+	console.log(bitBuffer.length,"warning");
 	
-	
+	decodingQueue.forEach(module => {
+		if(colourFormat === "yiq"){
+			let bitLength = readVarint(BYTE_LENGTH);
+			let dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			module.Y_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 256,name: "Y",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("Y decoded");
+
+			bitLength = readVarint(BYTE_LENGTH);
+			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			module.I_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 511,name: "I",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("I decoded");
+
+			bitLength = readVarint(BYTE_LENGTH);
+			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			module.Q_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 511,name: "Q",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("Q decoded");
+		}
+	})
+	console.log(decodingQueue)
 
 	let t1 = performance.now();
 	console.log("decoding took",t1-t0,"ms");

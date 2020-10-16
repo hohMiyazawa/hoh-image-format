@@ -129,3 +129,18 @@ function deSerialize(imageData,number){
 	}
 	return channels
 }
+
+function getPatch(imageData,ww,hh,x,y,width,height){
+	if(x >= ww || y >= hh || x + width > ww || y + height > hh){
+		throw "bad patch dimensions"
+	}
+	if(x === 0 && y === 0 && ww === width && hh === height){
+		return imageData
+	}
+	let patch = [];
+	for(let i=0;i<height;i++){
+		let offset = (y+i) * ww + x;
+		patch = patch.concat(imageData.slice(offset,offset + width))
+	}
+	return patch
+}

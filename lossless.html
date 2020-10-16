@@ -214,6 +214,9 @@ options.forEach(option => {
 			opt.value = val;
 			select.appendChild(opt);
 		})
+		select.onchange = function(){
+			option.value = select.value
+		};
 		param.appendChild(select)
 	}
 	let description = document.createElement("span");
