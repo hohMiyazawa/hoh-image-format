@@ -2,7 +2,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	console.info("Decoding",channel_options.name);
 	const width = channel_options.width;
 	const height = channel_options.height;
-	const range = channel_options.range;
+	let range = channel_options.range;
 
 	console.log("first bytes of stream",data[0],data[1],data[2]);
 
@@ -144,6 +144,15 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 	];
 
+	let smallest = dePlex(
+		new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
+	);
+	let largest = dePlex(
+		new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
+	);
+	range = largest - smallest + 1;
+	console.log("range",smallest,largest);
+
 	let bestRow = new Array(width).fill(0);
 
 	let chances = new Array(2*range-1).fill(1);
@@ -202,5 +211,10 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		chances[predicted]++
 	}
 
-	return decodedData
+	if(smallest){
+		return decodedData.map(a => a + smallest)
+	}
+	else{
+		return decodedData
+	}
 }

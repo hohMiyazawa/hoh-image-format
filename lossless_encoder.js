@@ -2,7 +2,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	console.info("Encoding",channel_options.name);
 	const width = channel_options.width;
 	const height = channel_options.height;
-	const range = channel_options.range;
+	let range = channel_options.range;
 
 	let dataBuffer = [];
 	let writer = {
@@ -119,6 +119,20 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		}
 	];
+	let smallest = range;
+	let largest = 0;
+	data.forEach(value => {
+		smallest = Math.min(smallest,value);
+		largest = Math.max(largest,value);
+	})
+	dataBuffer.push(...rePlex(smallest,Math.ceil(Math.log2(range))));
+	dataBuffer.push(...rePlex(largest,Math.ceil(Math.log2(range))));
+	if(smallest){
+		data = data.map(value => value - smallest)
+	}
+	range = largest - smallest + 1;
+	console.log("range",smallest,largest);
+
 	let bestRow = new Array(width).fill(0);
 
 	let chances = new Array(2*range - 1).fill(1);
