@@ -197,6 +197,18 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	range = largest - smallest + 1;
 	console.log("range",smallest,largest);
 
+	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
+	let origMap;
+
+	const crossPredictionSize = 64;
+	if(hasCrossPrediction){
+		origMap = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
+			b => new Array(context_data.lumaRange).fill(0).map(a => 
+				new Array(range).fill(1)
+			)
+		)
+	}
+
 	let bestRow = new Array(width).fill(0);
 
 	let chances = new Array(2*range-1).fill(1);
@@ -220,6 +232,15 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 					Math.round(
 						Math.pow(chances[i],0.9)
 						* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+						* (hasCrossPrediction ? Math.cbrt(
+							origMap[
+								Math.floor((index % width) / crossPredictionSize)
+							][
+								context_data.luma[index]
+							][
+								i + predi - range + 1
+							]
+						) : 1)
 					)
 				)
 			}
@@ -250,6 +271,23 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 			histograms[Math.floor((index % width) / histogramSize)][decodedData[negaIndex]]--
 		}
 
+		if(hasCrossPrediction){
+			origMap[
+				Math.floor((index % width) / crossPredictionSize)
+			][
+				context_data.luma[index]
+			][value]++;
+			let negaIndex2 = index - crossPredictionSize*width;
+			if(negaIndex2 >= 0){
+				origMap[
+					Math.floor((index % width) / crossPredictionSize)
+				][
+					context_data.luma[negaIndex2]
+				][
+					decodedData[negaIndex2]
+				]--
+			}
+		}
 
 		decodedData.push(value);
 		chances[predicted]++

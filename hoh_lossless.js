@@ -118,7 +118,7 @@ let lossless_encoder = function(data,info,options){
 	let partitionBits = [];
 	while(blockQueue.length){
 		let last = blockQueue.pop();
-		if(options.optimisePartitioning && (blockQueue.length + encodingQueue.length) === 0){
+		if(options.optimisePartitioning && last.size/2 >= options.minModuleSize && (blockQueue.length + encodingQueue.length) === 0){
 			partitionBits.push(1);
 			let s = last.size/2;
 			if(height > last.y + s){
@@ -127,7 +127,7 @@ let lossless_encoder = function(data,info,options){
 				}
 				blockQueue.push({size: s,x:last.x,y:last.y + s})
 			}
-			else if(width > last.x + s){
+			if(width > last.x + s){
 				blockQueue.push({size: s,x:last.x + s,y:last.y})
 			}
 			blockQueue.push({size: s,x:last.x,y:last.y})
@@ -151,13 +151,14 @@ let lossless_encoder = function(data,info,options){
 			let trueWidth = Math.min(module.size,width - module.x);
 			let trueHeight = Math.min(module.size,height - module.y);
 			console.info("Starting Y...");
+			const Y_patch = getPatch(
+				channels[0],width,height,
+				module.x,module.y,
+				trueWidth,
+				trueHeight
+			);
 			let Y_data = encodeChannel_lossless(
-				getPatch(
-					channels[0],width,height,
-					module.x,module.y,
-					trueWidth,
-					trueHeight
-				),
+				Y_patch,
 				{range: 256,name: "Y",width: trueWidth,height: trueHeight},
 				options,
 				{}
@@ -172,7 +173,7 @@ let lossless_encoder = function(data,info,options){
 				),
 				{range: 511,name: "I",width: trueWidth,height: trueHeight},
 				options,
-				{}
+				{luma: Y_patch,lumaRange: 256}
 			)
 			console.info("Starting Q...");
 			let Q_data = encodeChannel_lossless(
@@ -184,7 +185,7 @@ let lossless_encoder = function(data,info,options){
 				),
 				{range: 511,name: "Q",width: trueWidth,height: trueHeight},
 				options,
-				{}
+				{luma: Y_patch,lumaRange: 256}
 			)
 			return Y_data.concat(I_data).concat(Q_data)
 		})
@@ -355,7 +356,7 @@ let lossless_decoder = function(data,info,options,callback){
 				}
 				blockQueue.push({size: s,x:last.x,y:last.y + s})
 			}
-			else if(width > last.x + s){
+			if(width > last.x + s){
 				blockQueue.push({size: s,x:last.x + s,y:last.y})
 			}
 			blockQueue.push({size: s,x:last.x,y:last.y})
@@ -410,7 +411,7 @@ let lossless_decoder = function(data,info,options,callback){
 						bitLength: bitLength_I
 					},
 					parameters,
-					{}
+					{luma: Y_decoded,lumaRange: 256}
 				])
 			}
 			let I_recieve = function(e){
@@ -428,7 +429,7 @@ let lossless_decoder = function(data,info,options,callback){
 						bitLength: bitLength_Q
 					},
 					parameters,
-					{}
+					{luma: Y_decoded,lumaRange: 256}
 				])
 			}
 			let Q_recieve = function(e){
