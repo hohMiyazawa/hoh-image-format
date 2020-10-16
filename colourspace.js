@@ -33,6 +33,26 @@ function rgb_to_yiq(imageData){
 	return outBuffer
 }
 
+function rgb_to_greyscale(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		let R = imageData[i];
+		let G = imageData[i + 1];
+		let B = imageData[i + 2];
+
+		outBuffer.push(Math.round((R+2*G+B)/4))
+	}
+	return outBuffer
+}
+
+function greyscale_to_rgb(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i++){
+		outBuffer.push(imageData[i],imageData[i],imageData[i])
+	}
+	return outBuffer
+}
+
 function yiq_to_rgb(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i += 3){

@@ -211,6 +211,22 @@ let lossless_encoder = function(data,info,options){
 			return R_data.concat(G_data).concat(B_data)
 		})
 	}
+	else if(info.pixelFormat === "greyscale"){
+		moduleData = encodingQueue.map(module => {
+			console.info("Starting Y...");
+			let Y_data = encodeChannel_lossless(
+				getPatch(
+					data,width,height,
+					module.x,module.y,
+					module.size,module.size
+				),
+				{range: 256,name: "Y",width: width,height: height},
+				options,
+				{}
+			)
+			return Y_data
+		})
+	}
 
 	console.info("Modules compressed");
 
@@ -417,6 +433,31 @@ let lossless_decoder = function(data,info,options){
 					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
 					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
 					decodedData[((j+module.y)*width + module.x + i)*4 + 3] = A;
+				}
+			}
+		}
+		else if(colourFormat === "greyscale"){
+			let bitLength = readVarint(BYTE_LENGTH);
+			let dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			let Y_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 256,name: "Y",width: module.size,height: module.size,bitLength: bitLength},
+				parameters,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("Y decoded");
+
+			let decodedModule = greyscale_to_rgb(Y_decoded);
+			for(let j=0;j<module.size;j++){
+				for(let i=0;i<module.size;i++){
+					let R = decodedModule[(j*module.size + i)*3];
+					let G = decodedModule[(j*module.size + i)*3 + 1];
+					let B = decodedModule[(j*module.size + i)*3 + 2];
+					decodedData[((j+module.y)*width + module.x + i)*4] = R;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 3] = 255;
 				}
 			}
 		}

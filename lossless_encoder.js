@@ -123,6 +123,10 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 
 	let chances = new Array(2*range - 1).fill(1);
 
+	const histogramSize = 32;
+
+	let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1))
+
 	let enc = new ArithmeticEncoder(NUM_OF_BITS, writer);
 	data.forEach((value,index) => {
 		let predi = predictors[bestRow[index % width]].predict(index);
@@ -134,7 +138,12 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 		let localChances = [];
 		for(let i=0;i<chances.length;i++){
 			if(i >= lowest && i <= highest){
-				localChances.push(chances[i])
+				localChances.push(
+					Math.round(
+						Math.pow(chances[i],0.9)
+						* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+					)
+				)
 			}
 			else{
 				localChances.push(0)
@@ -170,6 +179,12 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			}
 		};
 		bestRow[index % width] = record_index;
+
+		histograms[Math.floor((index % width) / histogramSize)][value]++;
+		let negaIndex = index - histogramSize*width;
+		if(negaIndex >= 0){
+			histograms[Math.floor((index % width) / histogramSize)][data[negaIndex]]--
+		}
 
 		chances[predicted]++;
 	});
