@@ -1616,7 +1616,7 @@ function encoder(imageData,options){
 			}
 		}
 		else if(options.pixelFormat === "rgba"){
-			if(options.colourQuantizer === 0 && options.quantizer === 0){
+			if(false && options.colourQuantizer === 0 && options.quantizer === 0){
 				options.target_pixelFormat = "yiq26a"
 			}
 			else{
