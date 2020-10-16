@@ -188,14 +188,30 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 	];
 
-	let smallest = dePlex(
-		new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
-	);
-	let largest = dePlex(
-		new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
-	);
-	range = largest - smallest + 1;
-	console.log("range",smallest,largest);
+	let smallest = 0;
+	let index_colour = null;
+	if(reader.read()){
+		let indexLength = dePlex(new Array(8).fill(0).map(_ => reader.read()));
+		index_colour = [];
+		for(let i=0;i<indexLength;i++){
+			index_colour.push([
+				dePlex(new Array(8).fill(0).map(_ => reader.read())),
+				dePlex(new Array(8).fill(0).map(_ => reader.read())),
+				dePlex(new Array(8).fill(0).map(_ => reader.read()))
+			])
+		}
+		range = indexLength
+	}
+	else{
+		smallest = dePlex(
+			new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
+		);
+		let largest = dePlex(
+			new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
+		);
+		range = largest - smallest + 1;
+		console.log("range",smallest,largest);
+	}
 
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;
@@ -293,16 +309,23 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		chances[predicted]++
 	}
 
-	if(smallest){
-		return decodedData.map(a => a + smallest)
+	if(index_colour){
+		return {
+			data: decodedData.map(value => index_colour[value]),
+			isIndex: true
+		}
 	}
 	else{
-		return decodedData
+		if(smallest){
+			return decodedData.map(a => a + smallest)
+		}
+		else{
+			return decodedData
+		}
 	}
 }
 
 onmessage = function(e){
-	console.log("message",e.data);
 	let workerResult = decodeChannel_lossless(...e.data);
 	postMessage(workerResult);
 }

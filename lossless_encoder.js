@@ -119,19 +119,31 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		}
 	];
-	let smallest = range;
-	let largest = 0;
-	data.forEach(value => {
-		smallest = Math.min(smallest,value);
-		largest = Math.max(largest,value);
-	})
-	dataBuffer.push(...rePlex(smallest,Math.ceil(Math.log2(range))));
-	dataBuffer.push(...rePlex(largest,Math.ceil(Math.log2(range))));
-	if(smallest){
-		data = data.map(value => value - smallest)
+	if(channel_options.indexed){
+		dataBuffer.push(1);
+		dataBuffer.push(...rePlex(channel_options.index.length,8));
+		channel_options.index.forEach(colour => {
+			dataBuffer.push(...rePlex(colour[0],8));
+			dataBuffer.push(...rePlex(colour[1],8));
+			dataBuffer.push(...rePlex(colour[2],8));
+		})
 	}
-	range = largest - smallest + 1;
-	console.log("range",smallest,largest);
+	else{
+		dataBuffer.push(0);
+		let smallest = range;
+		let largest = 0;
+		data.forEach(value => {
+			smallest = Math.min(smallest,value);
+			largest = Math.max(largest,value);
+		})
+		dataBuffer.push(...rePlex(smallest,Math.ceil(Math.log2(range))));
+		dataBuffer.push(...rePlex(largest,Math.ceil(Math.log2(range))));
+		if(smallest){
+			data = data.map(value => value - smallest)
+		}
+		range = largest - smallest + 1;
+		console.log("range",smallest,largest);
+	}
 
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;

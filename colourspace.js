@@ -208,3 +208,37 @@ function getPatch(imageData,ww,hh,x,y,width,height){
 	}
 	return patch
 }
+
+function check_index(imageData){
+	let list = [];
+	const index_limit = Math.min(256,imageData.length/6);
+	for(let i=0;i<imageData.length;i += 3){
+		if(
+			!list.find(
+				ele => ele[0] === imageData[i + 0]
+					&& ele[1] === imageData[i + 1]
+					&& ele[2] === imageData[i + 2]
+			)
+		){
+			list.push(
+				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
+			)
+		}
+		if(list.length > index_limit){
+			return null
+		}
+	}
+	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114)
+}
+
+function rgb_to_indexed(imageData,index){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		outBuffer.push(index.findIndex(
+			ele => ele[0] === imageData[i + 0]
+				&& ele[1] === imageData[i + 1]
+				&& ele[2] === imageData[i + 2]
+		))
+	}
+	return outBuffer
+}
