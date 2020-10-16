@@ -329,7 +329,7 @@ let lossless_decoder = function(data,info,options){
 			let Y_decoded = decodeChannel_lossless(
 				data.slice(currentIndex,currentIndex + dataLength),
 				{range: 256,name: "Y",width: module.size,height: module.size,bitLength: bitLength},
-				options,
+				parameters,
 				{}
 			);
 			currentIndex += dataLength;
@@ -340,7 +340,7 @@ let lossless_decoder = function(data,info,options){
 			let I_decoded = decodeChannel_lossless(
 				data.slice(currentIndex,currentIndex + dataLength),
 				{range: 511,name: "I",width: module.size,height: module.size,bitLength: bitLength},
-				options,
+				parameters,
 				{}
 			);
 			currentIndex += dataLength;
@@ -351,7 +351,7 @@ let lossless_decoder = function(data,info,options){
 			let Q_decoded = decodeChannel_lossless(
 				data.slice(currentIndex,currentIndex + dataLength),
 				{range: 511,name: "Q",width: module.size,height: module.size,bitLength: bitLength},
-				options,
+				parameters,
 				{}
 			);
 			currentIndex += dataLength;
@@ -365,6 +365,54 @@ let lossless_decoder = function(data,info,options){
 					let G = decodedModule[(j*module.size + i)*4 + 1];
 					let B = decodedModule[(j*module.size + i)*4 + 2];
 					let A = decodedModule[(j*module.size + i)*4 + 3];
+					decodedData[((j+module.y)*width + module.x + i)*4] = R;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
+					decodedData[((j+module.y)*width + module.x + i)*4 + 3] = A;
+				}
+			}
+		}
+		else if(colourFormat === "rgb"){
+			let bitLength = readVarint(BYTE_LENGTH);
+			let dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			let R_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 256,name: "R",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("R decoded");
+
+			bitLength = readVarint(BYTE_LENGTH);
+			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			let G_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 256,name: "G",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("G decoded");
+
+			bitLength = readVarint(BYTE_LENGTH);
+			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
+			let B_decoded = decodeChannel_lossless(
+				data.slice(currentIndex,currentIndex + dataLength),
+				{range: 256,name: "B",width: module.size,height: module.size,bitLength: bitLength},
+				options,
+				{}
+			);
+			currentIndex += dataLength;
+			console.info("B decoded");
+
+			let decodedModule = serialize([R_decoded,G_decoded,B_decoded]);
+			for(let j=0;j<module.size;j++){
+				for(let i=0;i<module.size;i++){
+					let R = decodedModule[(j*module.size + i)*3];
+					let G = decodedModule[(j*module.size + i)*3 + 1];
+					let B = decodedModule[(j*module.size + i)*3 + 2];
+					let A = 255;
 					decodedData[((j+module.y)*width + module.x + i)*4] = R;
 					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
 					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;

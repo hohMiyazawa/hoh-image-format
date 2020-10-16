@@ -12,17 +12,139 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 		close: function(){}
 	}
 
-	let chances = new Array(range).fill(1);
+	let predictors = [
+		{
+			name: "previous",
+			predict: function(index){
+				if(index % width){
+					return data[index - 1]
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "top",
+			predict: function(index){
+				if(index >= width){
+					return data[index - width]
+				}
+				else if(index % width){
+					return data[index - 1]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average",
+			predict: function(index){
+				if(index % width){
+					if(index >= width){
+						return Math.floor((data[index - 1] + data[index - width])/2)
+					}
+					else{
+						return data[index - 1]
+					}
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "paeth",
+			predict: function(index){
+				if(index % width && index >= width){
+					let A = data[index - 1];
+					let B = data[index - width];
+					let C = data[index - width - 1];
+					let p = A + B - C;
+					let Ap = Math.abs(A - p);
+					let Bp = Math.abs(B - p);
+					let Cp = Math.abs(C - p);
+					let mini = Math.min(Ap,Bp,Cp);
+					if(mini === Ap){
+						return A
+					}
+					else if(mini === Bp){
+						return B
+					}
+					else{
+						return C
+					}
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				else if(index % width){
+					return data[index - 1]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "top_left",
+			predict: function(index){
+				if(index % width && index >= width){
+					return data[index - width - 1];
+				}
+				else if(index % width){
+					return data[index - 1]
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "top_right",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return data[index - width + 1];
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		}
+	];
+	let bestRow = new Array(width).fill(0);
+
+	let chances = new Array(2*range - 1).fill(1);
 
 	let enc = new ArithmeticEncoder(NUM_OF_BITS, writer);
 	data.forEach((value,index) => {
+		let predi = predictors[bestRow[index % width]].predict(index);
+		let predicted = value - predi + range - 1;
+
+		let lowest = 0 - predi + range - 1;
+		let highest = (range - 1) - predi + range - 1;
+
 		let localChances = [];
-		localChances = chances;
+		for(let i=0;i<chances.length;i++){
+			if(i >= lowest && i <= highest){
+				localChances.push(chances[i])
+			}
+			else{
+				localChances.push(0)
+			}
+		}
 		let total = 0;
 		let getLow;
 		let getHigh;
 		for(let i=0;i<localChances.length;i++){
-			if(value === i){
+			if(predicted === i){
 				getLow = total;
 				getHigh = total + localChances[i]
 			}
@@ -34,9 +156,22 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 				getLow: _ => getLow,
 				getHigh: _ => getHigh
 			},
-			value
+			predicted
 		)
-		chances[value]++
+
+
+		let record = 1e6;
+		let record_index = 0;
+		for(let i=0;i<predictors.length;i++){
+			let probability = Math.abs(value - predictors[i].predict(index));
+			if(probability < record){
+				record = probability;
+				record_index = i;
+			}
+		};
+		bestRow[index % width] = record_index;
+
+		chances[predicted]++;
 	});
 	enc.finish();
 	
