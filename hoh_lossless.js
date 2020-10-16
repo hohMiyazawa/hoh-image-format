@@ -118,9 +118,18 @@ let lossless_encoder = function(data,info,options){
 	let partitionBits = [];
 	while(blockQueue.length){
 		let last = blockQueue.pop();
-		//no partitioning so far
-		partitionBits.push(0);
-		encodingQueue.push(last)
+		console.log("partitioning",options.optimisePartitioning);
+		if(options.optimisePartitioning && (blockQueue.length + encodingQueue.length) === 0){
+			partitionBits.push(1);
+			blockQueue.push({size: last.size/2,x:last.size/2,y:last.size/2});
+			blockQueue.push({size: last.size/2,x:0,y:last.size/2});
+			blockQueue.push({size: last.size/2,x:last.size/2,y:0});
+			blockQueue.push({size: last.size/2,x:0,y:0});
+		}
+		else{
+			partitionBits.push(0);
+			encodingQueue.push(last)
+		}
 	}
 	while(partitionBits.length % BYTE_LENGTH){
 		partitionBits.push(0);
@@ -133,15 +142,17 @@ let lossless_encoder = function(data,info,options){
 	if(info.pixelFormat === "yiq"){
 		let channels = deSerialize(data,3);
 		moduleData = encodingQueue.map(module => {
+			let trueWidth = Math.min(module.size,width - module.x);
+			let trueHeight = Math.min(module.size,height - module.y);
 			console.info("Starting Y...");
 			let Y_data = encodeChannel_lossless(
 				getPatch(
 					channels[0],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 256,name: "Y",width: width,height: height},
+				{range: 256,name: "Y",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -150,10 +161,10 @@ let lossless_encoder = function(data,info,options){
 				getPatch(
 					channels[1],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 511,name: "I",width: width,height: height},
+				{range: 511,name: "I",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -162,10 +173,10 @@ let lossless_encoder = function(data,info,options){
 				getPatch(
 					channels[2],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth ,
+					trueHeight
 				),
-				{range: 511,name: "Q",width: width,height: height},
+				{range: 511,name: "Q",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -178,15 +189,17 @@ let lossless_encoder = function(data,info,options){
 	else if(info.pixelFormat === "rgb"){
 		let channels = deSerialize(data,3);
 		moduleData = encodingQueue.map(module => {
+			let trueWidth = Math.min(module.size,width - module.x);
+			let trueHeight = Math.min(module.size,height - module.y);
 			console.info("Starting R...");
 			let R_data = encodeChannel_lossless(
 				getPatch(
 					channels[0],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 256,name: "R",width: width,height: height},
+				{range: 256,name: "R",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -195,10 +208,10 @@ let lossless_encoder = function(data,info,options){
 				getPatch(
 					channels[1],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 256,name: "G",width: width,height: height},
+				{range: 256,name: "G",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -207,10 +220,10 @@ let lossless_encoder = function(data,info,options){
 				getPatch(
 					channels[2],width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 256,name: "B",width: width,height: height},
+				{range: 256,name: "B",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -219,15 +232,17 @@ let lossless_encoder = function(data,info,options){
 	}
 	else if(info.pixelFormat === "greyscale"){
 		moduleData = encodingQueue.map(module => {
+			let trueWidth = Math.min(module.size,width - module.x);
+			let trueHeight = Math.min(module.size,height - module.y);
 			console.info("Starting Y...");
 			let Y_data = encodeChannel_lossless(
 				getPatch(
 					data,width,height,
 					module.x,module.y,
-					Math.min(module.size,width - module.x),
-					Math.min(module.size,height - module.y)
+					trueWidth,
+					trueHeight
 				),
-				{range: 256,name: "Y",width: width,height: height},
+				{range: 256,name: "Y",width: trueWidth,height: trueHeight},
 				options,
 				{}
 			)
@@ -257,9 +272,8 @@ let lossless_encoder = function(data,info,options){
 	return Uint8Array.from(encodedData)
 }
 
-let lossless_decoder = function(data,info,options){
+let lossless_decoder = function(data,info,options,callback){
 	console.info("DECODING");
-	let t0 = performance.now()
 	let currentIndex = 1;
 	let bitBuffer = rePlex(data[0]);
 	let readByteNative = function(){
@@ -327,9 +341,11 @@ let lossless_decoder = function(data,info,options){
 	let partitionBitsRead = 0;
 	while(blockQueue.length){
 		let last = blockQueue.pop();
-		//no partitioning so far
 		if(readBit()){
-			throw "not implemented"
+			blockQueue.push({size: last.size/2,x:last.size/2,y:last.size/2});
+			blockQueue.push({size: last.size/2,x:0,y:last.size/2});
+			blockQueue.push({size: last.size/2,x:last.size/2,y:0});
+			blockQueue.push({size: last.size/2,x:0,y:0});
 		}
 		else{
 			decodingQueue.push(last)
@@ -341,78 +357,104 @@ let lossless_decoder = function(data,info,options){
 		readBit()
 	}
 
-	console.log(bitBuffer.length,"warning");
-
 	let decodedData = new Array(width*height*4).fill(0);
 	
-	decodingQueue.forEach(module => {
+	let moduleDigest = module => {
+		let worker = new Worker("lossless_decoder.js");
 		let trueWidth = Math.min(module.size,width - module.x);
 		if(colourFormat === "yiq"){
-			let bitLength = readVarint(BYTE_LENGTH);
-			let dataLength = Math.ceil(bitLength / BYTE_LENGTH);
-			let Y_decoded = decodeChannel_lossless(
-				data.slice(currentIndex,currentIndex + dataLength),
+			let Y_decoded;
+			let I_decoded;
+			let Q_decoded
+
+			let bitLength_Y = readVarint(BYTE_LENGTH);
+			let dataLength_Y = Math.ceil(bitLength_Y / BYTE_LENGTH);
+			let data_Y = data.slice(currentIndex,currentIndex + dataLength_Y);
+			currentIndex += dataLength_Y;
+
+			let bitLength_I = readVarint(BYTE_LENGTH);
+			let dataLength_I = Math.ceil(bitLength_I / BYTE_LENGTH);
+			let data_I = data.slice(currentIndex,currentIndex + dataLength_I);
+			currentIndex += dataLength_I;
+
+			let bitLength_Q = readVarint(BYTE_LENGTH);
+			let dataLength_Q = Math.ceil(bitLength_Q / BYTE_LENGTH);
+			let data_Q = data.slice(currentIndex,currentIndex + dataLength_Q);
+			currentIndex += dataLength_Q;
+
+			let Y_recieve = function(e){
+				Y_decoded = e.data;
+				console.info("Y decoded");
+
+				worker.onmessage = I_recieve;
+				worker.postMessage([
+					data_I,
+					{
+						range: 511,
+						name: "I",
+						width: trueWidth,
+						height: Math.min(module.size,height - module.y),
+						bitLength: bitLength_I
+					},
+					parameters,
+					{}
+				])
+			}
+			let I_recieve = function(e){
+				I_decoded = e.data;
+				console.info("I decoded");
+
+				worker.onmessage = Q_recieve;
+				worker.postMessage([
+					data_Q,
+					{
+						range: 511,
+						name: "Q",
+						width: trueWidth,
+						height: Math.min(module.size,height - module.y),
+						bitLength: bitLength_Q
+					},
+					parameters,
+					{}
+				])
+			}
+			let Q_recieve = function(e){
+				Q_decoded = e.data;
+				console.info("Q decoded");
+
+				let decodedModule = yiq_to_rgba(serialize([Y_decoded,I_decoded,Q_decoded]));
+				console.log("first pix yiq",Y_decoded[0],I_decoded[0],Q_decoded[0]);
+				for(let j=0;j<module.size;j++){
+					for(let i=0;i<trueWidth;i++){
+						let R = decodedModule[(j*trueWidth + i)*4];
+						let G = decodedModule[(j*trueWidth + i)*4 + 1];
+						let B = decodedModule[(j*trueWidth + i)*4 + 2];
+						let A = decodedModule[(j*trueWidth + i)*4 + 3];
+						decodedData[((j+module.y)*width + module.x + i)*4] = R;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 3] = A;
+					}
+				}
+				callback({
+					imageData: decodedData,
+					width: width,
+					height: height
+				})
+			}
+			worker.onmessage = Y_recieve;
+			worker.postMessage([
+				data_Y,
 				{
 					range: 256,
 					name: "Y",
 					width: trueWidth,
 					height: Math.min(module.size,height - module.y),
-					bitLength: bitLength
+					bitLength: bitLength_Y
 				},
 				parameters,
 				{}
-			);
-			currentIndex += dataLength;
-			console.info("Y decoded");
-
-			bitLength = readVarint(BYTE_LENGTH);
-			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
-			let I_decoded = decodeChannel_lossless(
-				data.slice(currentIndex,currentIndex + dataLength),
-				{
-					range: 511,
-					name: "I",
-					width: trueWidth,
-					height: Math.min(module.size,height - module.y),
-					bitLength: bitLength
-				},
-				parameters,
-				{}
-			);
-			currentIndex += dataLength;
-			console.info("I decoded");
-
-			bitLength = readVarint(BYTE_LENGTH);
-			dataLength = Math.ceil(bitLength / BYTE_LENGTH);
-			let Q_decoded = decodeChannel_lossless(
-				data.slice(currentIndex,currentIndex + dataLength),
-				{
-					range: 511,
-					name: "Y",
-					width: trueWidth,
-					height: Math.min(module.size,height - module.y),
-					bitLength: bitLength
-				},
-				parameters,
-				{}
-			);
-			currentIndex += dataLength;
-			console.info("Q decoded");
-
-			let decodedModule = yiq_to_rgba(serialize([Y_decoded,I_decoded,Q_decoded]));
-			console.log("first pix yiq",Y_decoded[0],I_decoded[0],Q_decoded[0]);
-			for(let j=0;j<module.size;j++){
-				for(let i=0;i<trueWidth;i++){
-					let R = decodedModule[(j*trueWidth + i)*4];
-					let G = decodedModule[(j*trueWidth + i)*4 + 1];
-					let B = decodedModule[(j*trueWidth + i)*4 + 2];
-					let A = decodedModule[(j*trueWidth + i)*4 + 3];
-					decodedData[((j+module.y)*width + module.x + i)*4] = R;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 3] = A;
-				}
-			}
+			])
 		}
 		else if(colourFormat === "rgb"){
 			let bitLength = readVarint(BYTE_LENGTH);
@@ -483,41 +525,43 @@ let lossless_decoder = function(data,info,options){
 		else if(colourFormat === "greyscale"){
 			let bitLength = readVarint(BYTE_LENGTH);
 			let dataLength = Math.ceil(bitLength / BYTE_LENGTH);
-			let Y_decoded = decodeChannel_lossless(
-				data.slice(currentIndex,currentIndex + dataLength),
+			let data_Y = data.slice(currentIndex,currentIndex + dataLength);
+			currentIndex += dataLength;
+
+			worker.onmessage = function(e){
+				let decodedModule = greyscale_to_rgb(e.data);
+				for(let j=0;j<module.size;j++){
+					for(let i=0;i<trueWidth;i++){
+						let R = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3];
+						let G = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3 + 1];
+						let B = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3 + 2];
+						decodedData[((j+module.y)*width + module.x + i)*4] = R;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
+						decodedData[((j+module.y)*width + module.x + i)*4 + 3] = 255;
+					}
+				}
+				callback({
+					imageData: decodedData,
+					width: width,
+					height: height
+				})
+			};
+			worker.postMessage([
+				data_Y,
 				{
 					range: 256,
 					name: "Y",
-					width: Math.min(module.size,width - module.x),
+					width: trueWidth,
 					height: Math.min(module.size,height - module.y),
 					bitLength: bitLength
 				},
 				parameters,
 				{}
-			);
-			currentIndex += dataLength;
-			console.info("Y decoded");
-
-			let decodedModule = greyscale_to_rgb(Y_decoded);
-			for(let j=0;j<module.size;j++){
-				for(let i=0;i<trueWidth;i++){
-					let R = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3];
-					let G = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3 + 1];
-					let B = decodedModule[(j*Math.min(module.size,width - module.x) + i)*3 + 2];
-					decodedData[((j+module.y)*width + module.x + i)*4] = R;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 1] = G;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 2] = B;
-					decodedData[((j+module.y)*width + module.x + i)*4 + 3] = 255;
-				}
-			}
+			])
 		}
-	})
-
-	let t1 = performance.now();
-	console.log("decoding took",t1-t0,"ms");
-	return {
-		imageData: decodedData,
-		width: width,
-		height: height
 	}
+	decodingQueue.forEach(module => {
+		moduleDigest(module)
+	})
 }

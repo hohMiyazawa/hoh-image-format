@@ -198,10 +198,12 @@ function getPatch(imageData,ww,hh,x,y,width,height){
 	if(x === 0 && y === 0 && ww === width && hh === height){
 		return imageData
 	}
+	let channels = imageData.length/(ww*hh);
+	console.log(channels,"channels");
 	let patch = [];
 	for(let i=0;i<height;i++){
-		let offset = (y+i) * ww + x;
-		patch = patch.concat(imageData.slice(offset,offset + width))
+		let offset = ((y+i) * ww + x)*channels;
+		patch = patch.concat(imageData.slice(offset,offset + width*channels))
 	}
 	return patch
 }

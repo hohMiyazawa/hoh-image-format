@@ -1,3 +1,47 @@
+importScripts("arith.js");
+importScripts("colourspace.js");
+
+const BYTE_LENGTH = 8;
+
+const internal_formats = [
+	"bit","greyscale","greyscalea","rgb","rgba","yiq","yiqa","ycocg","ycocga","indexed","indexeda","verbatim","verbatima","verbatimgreyscale","verbatimbit"
+]
+
+function rePlex(integer,base){
+	if(!base){
+		base = BYTE_LENGTH
+	}
+	return new Array(base).fill(0).map(
+		(_,index) => ((integer & (1 << ((base - 1) - index))) > 0) + 0
+	)
+}
+
+function dePlex(bitArray){
+	return bitArray.reduce(
+		(acc,bit,index) => acc + bit * (1 << ((bitArray.length - 1) - index)),
+		0
+	)
+}
+
+function encodeVarint(integer,base,derivative){
+	if(!base){
+		base = BYTE_LENGTH
+	}
+	let carryBit = +!!derivative;
+	let range = Math.pow(2,base - 1)
+	if(integer >= range){
+		return encodeVarint(
+			integer >> (base - 1),
+			base,
+			true
+		).concat(
+			carryBit,
+			rePlex(integer % range,base - 1)
+		)
+	}
+	return [carryBit].concat(rePlex(integer,base - 1))
+}
+
 let decodeChannel_lossless = function(data,channel_options,global_options,context_data){
 	console.info("Decoding",channel_options.name);
 	const width = channel_options.width;
@@ -217,4 +261,10 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	else{
 		return decodedData
 	}
+}
+
+onmessage = function(e){
+	console.log("message",e.data);
+	let workerResult = decodeChannel_lossless(...e.data);
+	postMessage(workerResult);
 }

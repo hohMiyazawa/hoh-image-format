@@ -26,7 +26,6 @@ body{
 		<script src="arith.js"></script>
 		<script src="colourspace.js"></script>
 		<script src="lossless_encoder.js"></script>
-		<script src="lossless_decoder.js"></script>
 		<script src="hoh_lossless.js"></script>
 	</head>
 	<body>
@@ -103,10 +102,17 @@ const inputElement = document.getElementById("hohInput");
 let html_decode = function(){
 	const fileList = inputElement.files;
 	readFileAsArrayBuffer(fileList[0], function(data){
-		let decodedData = lossless_decoder(new Uint8Array(data),{},{pixelFormat: "rgba"});
-		if(decodedData){
-			drawToCanvas(decodedData)
-		}
+		let worker = new Worker('lossless_decoder.js');
+		lossless_decoder(
+			new Uint8Array(data),
+			{},
+			{pixelFormat: "rgba"},
+			function(data){
+				if(data){
+					drawToCanvas(data)
+				}
+			}
+		)
 	},function(e){
 		console.error(e);
 	})
@@ -120,6 +126,11 @@ const buttonElementEncode = document.getElementById("encodeButton");
 const parameters = document.getElementById("parameters");
 
 let options = [
+	{
+		name: "optimisePartitioning",
+		type: "boolean",
+		value: true
+	},
 	{
 		name: "minModuleSize",
 		type: "number",
@@ -198,6 +209,9 @@ options.forEach(option => {
 		let checkbox = document.createElement("input");
 		checkbox.type = "checkbox";
 		checkbox.checked = option.value;
+		checkbox.oninput = function(){
+			option.value = checkbox.checked
+		}
 		param.appendChild(checkbox)
 	}
 	else if(option.type === "number"){

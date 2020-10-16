@@ -1,5 +1,5 @@
 let encodeChannel_lossless = function(data,channel_options,global_options,context_data){
-	console.info("Encoding",channel_options.name);
+	console.info("Encoding",channel_options.name,channel_options.width,channel_options.height);
 	const width = channel_options.width;
 	const height = channel_options.height;
 	let range = channel_options.range;
