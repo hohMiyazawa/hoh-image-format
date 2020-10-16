@@ -3882,8 +3882,18 @@ function encoder(imageData,options){
 							let reduction = Math.ceil(c_tot/enc._maximum_total);
 							localProbability = localProbability.map(val => Math.ceil(val/reduction))
 						}
+						let fakeTotal = 0;
+						let fakeLow;
+						let fakehigh;
+						for(let i=0;i<localProbability.length;i++){
+							if(i === waiting){
+								fakeLow = fakeTotal;
+								fakeHigh = fakeTotal + localProbability[i];
+							}
+							fakeTotal += localProbability[i];
+						}
 						enc.write(
-							new FrequencyTable(localProbability),
+							{total: fakeTotal,getLow: function(symbol){return fakeLow},getHigh: function(symbol){return fakeHigh}},
 							waiting
 						);
 						forige = waiting;
