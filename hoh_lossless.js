@@ -118,13 +118,19 @@ let lossless_encoder = function(data,info,options){
 	let partitionBits = [];
 	while(blockQueue.length){
 		let last = blockQueue.pop();
-		console.log("partitioning",options.optimisePartitioning);
 		if(options.optimisePartitioning && (blockQueue.length + encodingQueue.length) === 0){
 			partitionBits.push(1);
-			blockQueue.push({size: last.size/2,x:last.size/2,y:last.size/2});
-			blockQueue.push({size: last.size/2,x:0,y:last.size/2});
-			blockQueue.push({size: last.size/2,x:last.size/2,y:0});
-			blockQueue.push({size: last.size/2,x:0,y:0});
+			let s = last.size/2;
+			if(height > last.y + s){
+				if(width > last.x + s){
+					blockQueue.push({size: s,x:last.x + s,y:last.y + s})
+				}
+				blockQueue.push({size: s,x:last.x,y:last.y + s})
+			}
+			else if(width > last.x + s){
+				blockQueue.push({size: s,x:last.x + s,y:last.y})
+			}
+			blockQueue.push({size: s,x:last.x,y:last.y})
 		}
 		else{
 			partitionBits.push(0);
@@ -342,10 +348,17 @@ let lossless_decoder = function(data,info,options,callback){
 	while(blockQueue.length){
 		let last = blockQueue.pop();
 		if(readBit()){
-			blockQueue.push({size: last.size/2,x:last.size/2,y:last.size/2});
-			blockQueue.push({size: last.size/2,x:0,y:last.size/2});
-			blockQueue.push({size: last.size/2,x:last.size/2,y:0});
-			blockQueue.push({size: last.size/2,x:0,y:0});
+			let s = last.size/2;
+			if(height > last.y + s){
+				if(width > last.x + s){
+					blockQueue.push({size: s,x:last.x + s,y:last.y + s})
+				}
+				blockQueue.push({size: s,x:last.x,y:last.y + s})
+			}
+			else if(width > last.x + s){
+				blockQueue.push({size: s,x:last.x + s,y:last.y})
+			}
+			blockQueue.push({size: s,x:last.x,y:last.y})
 		}
 		else{
 			decodingQueue.push(last)

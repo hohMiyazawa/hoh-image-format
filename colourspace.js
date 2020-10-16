@@ -193,6 +193,7 @@ function serialize(channels){
 
 function getPatch(imageData,ww,hh,x,y,width,height){
 	if(x >= ww || y >= hh || x + width > ww || y + height > hh){
+		console.log(ww,hh,x,y,width,height);
 		throw "bad patch dimensions"
 	}
 	if(x === 0 && y === 0 && ww === width && hh === height){
