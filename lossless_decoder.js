@@ -4,6 +4,8 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	const height = channel_options.height;
 	const range = channel_options.range;
 
+	console.log("first bytes of stream",data[0],data[1],data[2]);
+
 	let currentIndex = 1;
 	let bitBuffer = rePlex(data[0]);
 	let readBit = function(){
@@ -40,11 +42,11 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	for(let i=0;i<width*height;i++){
 		let localChances = [];
 		localChances = chances;
-		decodedData.push(
-			dec.read(
-				new FrequencyTable(localChances)
-			)
+		let value = dec.read(
+			new FrequencyTable(localChances)
 		)
+		decodedData.push(value);
+		chances[value]++
 	}
 
 	return decodedData

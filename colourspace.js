@@ -33,6 +33,37 @@ function rgb_to_yiq(imageData){
 	return outBuffer
 }
 
+function yiq_to_rgb(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		let Y = imageData[i];
+		let Co = imageData[i + 1] - 255;
+		let Cg = imageData[i + 2] - 255;
+		let G = Y - ((-Cg)>>1);
+		let B = Y + ((1-Cg)>>1) - (Co>>1);
+		let R = Co + B;
+
+		outBuffer.push(R,G,B)
+	}
+	return outBuffer
+}
+
+
+function yiq_to_rgba(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 3){
+		let Y = imageData[i];
+		let Co = imageData[i + 1] - 255;
+		let Cg = imageData[i + 2] - 255;
+		let G = Y - ((-Cg)>>1);
+		let B = Y + ((1-Cg)>>1) - (Co>>1);
+		let R = Co + B;
+
+		outBuffer.push(R,G,B,255)
+	}
+	return outBuffer
+}
+
 function rgba_to_subgreena(imageData){
 	let outBuffer = [];
 	for(let i=0;i<imageData.length;i += 4){
@@ -128,6 +159,16 @@ function deSerialize(imageData,number){
 		}
 	}
 	return channels
+}
+
+function serialize(channels){
+	let outBuffer = [];
+	for(let i=0;i<channels[0].length;i++){
+		channels.forEach(channel => {
+			outBuffer.push(channel[i])
+		})
+	}
+	return outBuffer
 }
 
 function getPatch(imageData,ww,hh,x,y,width,height){

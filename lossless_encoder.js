@@ -39,6 +39,8 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 		chances[value]++
 	});
 	enc.finish();
+	
+	console.log("first bytes of stream",dePlex(dataBuffer.slice(0,8)),dePlex(dataBuffer.slice(8,16)),dePlex(dataBuffer.slice(16,24)));
 
 	dataBuffer = encodeVarint(dataBuffer.length,BYTE_LENGTH).concat(dataBuffer);
 	while(dataBuffer.length % BYTE_LENGTH){
