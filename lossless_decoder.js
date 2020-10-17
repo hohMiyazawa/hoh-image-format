@@ -126,6 +126,55 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		},
 		{
+			name: "average_L-TL",
+			predict: function(index){
+				if(index % width){
+					if(index >= width){
+						return Math.floor((decodedData[index - 1] + decodedData[index - width - 1])/2)
+					}
+					else{
+						return decodedData[index - 1]
+					}
+				}
+				else if(index >= width){
+					return decodedData[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TL",
+			predict: function(index){
+				if(index % width){
+					if(index >= width){
+						return Math.floor((decodedData[index - width] + decodedData[index - width - 1])/2)
+					}
+					else{
+						return decodedData[index - 1]
+					}
+				}
+				else if(index >= width){
+					return decodedData[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((decodedData[index - width] + decodedData[index - width + 1])/2)
+				}
+				else if(index >= width){
+					return decodedData[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
 			name: "paeth",
 			predict: function(index){
 				if(index % width && index >= width){

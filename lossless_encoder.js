@@ -58,6 +58,55 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		},
 		{
+			name: "average_L-TL",
+			predict: function(index){
+				if(index % width){
+					if(index >= width){
+						return Math.floor((data[index - 1] + data[index - width - 1])/2)
+					}
+					else{
+						return data[index - 1]
+					}
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TL",
+			predict: function(index){
+				if(index % width){
+					if(index >= width){
+						return Math.floor((data[index - width] + data[index - width - 1])/2)
+					}
+					else{
+						return data[index - 1]
+					}
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((data[index - width] + data[index - width + 1])/2)
+				}
+				else if(index >= width){
+					return data[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
 			name: "paeth",
 			predict: function(index){
 				if(index % width && index >= width){
@@ -226,6 +275,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			}
 		};
 		bestRow[index % width] = record_index;
+		predictors[record_index].count++;
 
 		histograms[Math.floor((index % width) / histogramSize)][value]++;
 		let negaIndex = index - histogramSize*width;
@@ -265,5 +315,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	while(dataBuffer.length > (BYTE_LENGTH - 1)){
 		encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
 	}
+	console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
+	console.log(channel_options.name,encodedData.length,"bytes");
 	return encodedData
 }
