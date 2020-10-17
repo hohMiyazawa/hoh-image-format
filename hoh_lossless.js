@@ -135,6 +135,12 @@ let lossless_encoder = function(data,info,options){
 				trueWidth,
 				trueHeight
 			);
+			const I_patch = getPatch(
+				channels[1],width,height,
+				module.x,module.y,
+				trueWidth,
+				trueHeight
+			)
 			let Y_data = encodeChannel_lossless(
 				Y_patch,
 				{range: 256,name: "Y",width: trueWidth,height: trueHeight},
@@ -142,12 +148,7 @@ let lossless_encoder = function(data,info,options){
 				{}
 			)
 			let I_data = encodeChannel_lossless(
-				getPatch(
-					channels[1],width,height,
-					module.x,module.y,
-					trueWidth,
-					trueHeight
-				),
+				I_patch,
 				{range: 511,name: "I",width: trueWidth,height: trueHeight},
 				options,
 				{luma: Y_patch,lumaRange: 256}
@@ -161,7 +162,7 @@ let lossless_encoder = function(data,info,options){
 				),
 				{range: 511,name: "Q",width: trueWidth,height: trueHeight},
 				options,
-				{luma: Y_patch,lumaRange: 256}
+				{luma: Y_patch,lumaRange: 256,chroma: I_patch,chromaRange: 511}
 			)
 			m_data = Y_data.concat(I_data).concat(Q_data)
 		}
@@ -584,7 +585,7 @@ let lossless_decoder = function(data,info,options,callback){
 						bitLength: bitLength_Q
 					},
 					parameters,
-					{luma: Y_decoded,lumaRange: 256}
+					{luma: Y_decoded,lumaRange: 256,chroma: I_decoded,chromaRange: 511}
 				])
 			}
 			let Q_recieve = function(e){

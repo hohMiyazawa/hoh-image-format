@@ -345,6 +345,23 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 			translationTable = new Array(range).fill(0).map((_,index) => index);
 		}
 		else if(bit1 === 0 && bit2 === 1){
+			let occupied = dePlex(new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read()));
+
+			let deltas = [];
+			for(let i=0;i<occupied;i++){
+				deltas.push(parseInt(readDelta()) + 1)
+			};
+			let colourAllowable = [];
+			deltas.forEach((delta,index) => {
+				colourAllowable = colourAllowable.concat(new Array(delta - 1).fill(false))
+				colourAllowable.push(true)
+			});
+			colourAllowable.forEach((val,index) => {
+				if(val){
+					translationTable.push(index)
+				}
+			})
+			range = translationTable.length;
 		}
 		else if(bit1 === 1 && bit2 === 0){
 			let ranges = dePlex(new Array(Math.ceil(Math.log2(range)) - 1).fill(0).map(_ => reader.read()));
@@ -393,6 +410,17 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		)
 	}
 
+	let hasCrossPredictionColour = global_options.crossPredictionColour && context_data.chroma;
+	let origMapColour;
+
+	if(hasCrossPredictionColour){
+		origMapColour = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
+			b => new Array(context_data.chromaRange).fill(0).map(a => 
+				new Array(range).fill(1)
+			)
+		)
+	}
+
 	let bestRow = new Array(width).fill(0);
 
 	let chances = new Array(2*range-1).fill(1);
@@ -421,6 +449,15 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 								Math.floor((index % width) / crossPredictionSize)
 							][
 								context_data.luma[index]
+							][
+								i + predi - range + 1
+							]
+						) : 1)
+						* (hasCrossPredictionColour ? Math.cbrt(
+							origMapColour[
+								Math.floor((index % width) / crossPredictionSize)
+							][
+								context_data.chroma[index]
 							][
 								i + predi - range + 1
 							]
@@ -467,6 +504,24 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 					Math.floor((index % width) / crossPredictionSize)
 				][
 					context_data.luma[negaIndex2]
+				][
+					decodedData[negaIndex2]
+				]--
+			}
+		}
+
+		if(hasCrossPredictionColour){
+			origMapColour[
+				Math.floor((index % width) / crossPredictionSize)
+			][
+				context_data.chroma[index]
+			][value]++;
+			let negaIndex2 = index - crossPredictionSize*width;
+			if(negaIndex2 >= 0){
+				origMapColour[
+					Math.floor((index % width) / crossPredictionSize)
+				][
+					context_data.chroma[negaIndex2]
 				][
 					decodedData[negaIndex2]
 				]--

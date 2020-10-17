@@ -271,6 +271,18 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 
 		const PRIMITIVE = buildBook(primitive_huffman(frequencyTable.length));
 
+		delta_data = rePlex(occupied,Math.ceil(Math.log2(frequencyTable.length)));
+		delta = 0;
+
+		for(let i=0;i<frequencyTable.length;i++){
+			delta++;
+			if(frequencyTable[i]){
+				delta_data = delta_data.concat(PRIMITIVE[delta - 1]);
+				delta = 0
+			}
+		}
+		//console.log("delta table size",delta_data.length);
+
 		range_data = [];
 		let rangeActive = false;
 		delta = 0;
@@ -301,17 +313,17 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			dataBuffer.push(0,0);
 			console.log("no palette buckets");
 		}
-		if(Math.min(/*arith_list_data.length,*/range_data.length) < frequencyTable.length){
-			/*if(arith_list_data.length < range_data.length){
+		if(Math.min(delta_data.length,range_data.length) < frequencyTable.length){
+			if(delta_data.length < range_data.length){
 				dataBuffer.push(0,1);
-				dataBuffer.push(...arith_list_data);
-				console.log("list table size",arith_list_data.length,"bits",debug_list);
-			}*
-			/*else{*/
+				dataBuffer.push(...delta_data);
+				console.log("list table size",delta_data.length,"bits");
+			}
+			else{
 				dataBuffer.push(1,0);
 				dataBuffer.push(...range_data);
 				console.log("range data size",range_data.length,"bits");
-			/*}*/
+			}
 		}
 		else{
 			dataBuffer.push(1,1);
@@ -327,6 +339,17 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	if(hasCrossPrediction){
 		origMap = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
 			b => new Array(context_data.lumaRange).fill(0).map(a => 
+				new Array(range).fill(1)
+			)
+		)
+	}
+
+	let hasCrossPredictionColour = global_options.crossPredictionColour && context_data.chroma;
+	let origMapColour;
+
+	if(hasCrossPredictionColour){
+		origMapColour = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
+			b => new Array(context_data.chromaRange).fill(0).map(a => 
 				new Array(range).fill(1)
 			)
 		)
@@ -360,6 +383,15 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 								Math.floor((index % width) / crossPredictionSize)
 							][
 								context_data.luma[index]
+							][
+								i + predi - range + 1
+							]
+						) : 1)
+						* (hasCrossPredictionColour ? Math.cbrt(
+							origMapColour[
+								Math.floor((index % width) / crossPredictionSize)
+							][
+								context_data.chroma[index]
 							][
 								i + predi - range + 1
 							]
@@ -427,11 +459,29 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			}
 		}
 
+		if(hasCrossPredictionColour){
+			origMapColour[
+				Math.floor((index % width) / crossPredictionSize)
+			][
+				context_data.chroma[index]
+			][value]++;
+			let negaIndex2 = index - crossPredictionSize*width;
+			if(negaIndex2 >= 0){
+				origMapColour[
+					Math.floor((index % width) / crossPredictionSize)
+				][
+					context_data.chroma[negaIndex2]
+				][
+					data[negaIndex2]
+				]--
+			}
+		}
+
 		chances[predicted]++;
 	});
 	enc.finish();
 	
-	console.log("first bytes of stream",dePlex(dataBuffer.slice(0,8)),dePlex(dataBuffer.slice(8,16)),dePlex(dataBuffer.slice(16,24)));
+	//console.log("first bytes of stream",dePlex(dataBuffer.slice(0,8)),dePlex(dataBuffer.slice(8,16)),dePlex(dataBuffer.slice(16,24)));
 
 	dataBuffer = encodeVarint(dataBuffer.length,BYTE_LENGTH).concat(dataBuffer);
 	while(dataBuffer.length % BYTE_LENGTH){
