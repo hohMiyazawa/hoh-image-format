@@ -42,6 +42,77 @@ function encodeVarint(integer,base,derivative){
 	return [carryBit].concat(rePlex(integer,base - 1))
 }
 
+function createHuffman(freqs){
+	let workList = [];
+	let sizeUsed = 0;
+	Object.keys(freqs).forEach(symbol => {
+		if(freqs[symbol]){
+			workList.push({
+				isInternal: false,
+				symbol: symbol,
+				frequency: freqs[symbol]
+			});
+			sizeUsed += freqs[symbol]
+		}
+	});
+	if(!workList.length){
+		workList.push({
+			isInternal: false,
+			symbol: Object.keys(freqs)[0],
+			frequency: 0
+		})
+	}
+	while(workList.length > 1){
+		workList.sort((b,a) => a.frequency - b.frequency);
+		let newInternal = {
+			isInternal: true,
+			right: workList.pop(),
+			left: workList.pop()
+		}
+		newInternal.frequency = newInternal.left.frequency + newInternal.right.frequency;
+		workList.push(newInternal)
+	}
+	return workList[0]
+}
+
+function buildBook(huffmanTree){
+	let traverse = function(huffNode,prefix){
+		if(huffNode.isInternal){
+			return traverse(
+				huffNode.left,
+				prefix.concat(0)
+			).concat(
+				traverse(
+					huffNode.right,
+					prefix.concat(1)
+				)
+			)
+		}
+		else{
+			return [{
+				symbol: huffNode.symbol,
+				frequency: huffNode.frequency,
+				code: prefix
+			}]
+		}
+	}
+	let book = {};
+	traverse(huffmanTree,[]).forEach(entry => {
+		book[entry.symbol] = entry.code
+	})
+	return book
+}
+
+function primitive_huffman(states){
+	let base_freq = [];
+	let start = 10000;
+	for(let i=0;i<states;i++){
+		base_freq.push(start);
+		start = Math.round(start * (1/2 + (0.9 - 1/Math.sqrt(states))/2));
+	}
+	return createHuffman(base_freq)
+}
+
 let decodeChannel_lossless = function(data,channel_options,global_options,context_data){
 	console.info("Decoding",channel_options.name);
 	const width = channel_options.width;
@@ -237,7 +308,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 	];
 
-	let smallest = 0;
+	let translationTable = [];
 	let index_colour = null;
 	if(reader.read()){
 		let indexLength = dePlex(new Array(8).fill(0).map(_ => reader.read()));
@@ -252,14 +323,62 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		range = indexLength
 	}
 	else{
-		smallest = dePlex(
-			new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
-		);
-		let largest = dePlex(
-			new Array(Math.ceil(Math.log2(range))).fill(0).map(_ => reader.read())
-		);
-		range = largest - smallest + 1;
-		console.log("range",smallest,largest);
+
+		const PRIMITIVE = primitive_huffman(range);
+
+		let readDelta = function(){
+			let head = PRIMITIVE;
+			while(head.isInternal){
+				if(reader.read()){
+					head = head.right
+				}
+				else{
+					head = head.left
+				}
+			}
+			return head.symbol
+		}
+
+		let bit1 = reader.read();
+		let bit2 = reader.read();
+		if(bit1 === 0 && bit2 === 0){
+			translationTable = new Array(range).fill(0).map((_,index) => index);
+		}
+		else if(bit1 === 0 && bit2 === 1){
+		}
+		else if(bit1 === 1 && bit2 === 0){
+			let ranges = dePlex(new Array(Math.ceil(Math.log2(range)) - 1).fill(0).map(_ => reader.read()));
+			let deltas = [];
+			for(let i=0;i<ranges*2;i++){
+				deltas.push(parseInt(readDelta()) + 1)
+			};
+			let colourAllowable;
+			let rangeActive = false;
+			deltas.forEach((delta,index) => {
+				if(index === 0){
+					colourAllowable = new Array(delta - 1).fill(rangeActive)
+				}
+				else{
+					colourAllowable = colourAllowable.concat(new Array(delta).fill(rangeActive))
+				}
+				rangeActive = !rangeActive
+			});
+			colourAllowable.forEach((val,index) => {
+				if(val){
+					translationTable.push(index)
+				}
+			})
+			range = translationTable.length;
+		}
+		else{
+			translationTable = [];
+			for(let i=0;i<range;i++){
+				if(reader.read()){
+					translationTable.push(i);
+				}
+			}
+			range = translationTable.length;
+		}
 	}
 
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
@@ -365,12 +484,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 	}
 	else{
-		if(smallest){
-			return decodedData.map(a => a + smallest)
-		}
-		else{
-			return decodedData
-		}
+		return decodedData.map(a => translationTable[a])
 	}
 }
 

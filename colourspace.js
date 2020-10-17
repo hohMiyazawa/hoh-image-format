@@ -228,7 +228,7 @@ function check_index(imageData){
 			return null
 		}
 	}
-	return list.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114)
+	return list
 }
 
 function rgb_to_indexed(imageData,index){

@@ -1,3 +1,74 @@
+function createHuffman(freqs){
+	let workList = [];
+	let sizeUsed = 0;
+	Object.keys(freqs).forEach(symbol => {
+		if(freqs[symbol]){
+			workList.push({
+				isInternal: false,
+				symbol: symbol,
+				frequency: freqs[symbol]
+			});
+			sizeUsed += freqs[symbol]
+		}
+	});
+	if(!workList.length){
+		workList.push({
+			isInternal: false,
+			symbol: Object.keys(freqs)[0],
+			frequency: 0
+		})
+	}
+	while(workList.length > 1){
+		workList.sort((b,a) => a.frequency - b.frequency);
+		let newInternal = {
+			isInternal: true,
+			right: workList.pop(),
+			left: workList.pop()
+		}
+		newInternal.frequency = newInternal.left.frequency + newInternal.right.frequency;
+		workList.push(newInternal)
+	}
+	return workList[0]
+}
+
+function buildBook(huffmanTree){
+	let traverse = function(huffNode,prefix){
+		if(huffNode.isInternal){
+			return traverse(
+				huffNode.left,
+				prefix.concat(0)
+			).concat(
+				traverse(
+					huffNode.right,
+					prefix.concat(1)
+				)
+			)
+		}
+		else{
+			return [{
+				symbol: huffNode.symbol,
+				frequency: huffNode.frequency,
+				code: prefix
+			}]
+		}
+	}
+	let book = {};
+	traverse(huffmanTree,[]).forEach(entry => {
+		book[entry.symbol] = entry.code
+	})
+	return book
+}
+
+function primitive_huffman(states){
+	let base_freq = [];
+	let start = 10000;
+	for(let i=0;i<states;i++){
+		base_freq.push(start);
+		start = Math.round(start * (1/2 + (0.9 - 1/Math.sqrt(states))/2));
+	}
+	return createHuffman(base_freq)
+}
+
 let encodeChannel_lossless = function(data,channel_options,global_options,context_data){
 	console.info("Encoding",channel_options.name,channel_options.width,channel_options.height);
 	const width = channel_options.width;
@@ -168,6 +239,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		}
 	];
+	let translationTable = new Array(range);
 	if(channel_options.indexed){
 		dataBuffer.push(1);
 		dataBuffer.push(...rePlex(channel_options.index.length,8));
@@ -179,19 +251,73 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	}
 	else{
 		dataBuffer.push(0);
-		let smallest = range;
-		let largest = 0;
-		data.forEach(value => {
-			smallest = Math.min(smallest,value);
-			largest = Math.max(largest,value);
-		})
-		dataBuffer.push(...rePlex(smallest,Math.ceil(Math.log2(range))));
-		dataBuffer.push(...rePlex(largest,Math.ceil(Math.log2(range))));
-		if(smallest){
-			data = data.map(value => value - smallest)
+		frequencyTable = new Array(range).fill(0);
+		data.forEach(value => frequencyTable[value]++);
+		let delta = 0;
+		for(let i=0;i<range;i++){
+			if(
+				frequencyTable[i]
+			){
+				translationTable[i] = delta;
+				delta++
+			}
 		}
-		range = largest - smallest + 1;
-		console.log("range",smallest,largest);
+
+		data = data.map(value => translationTable[value]);
+
+		range = delta;
+
+		let occupied = frequencyTable.filter(a => a).length;
+
+		const PRIMITIVE = buildBook(primitive_huffman(frequencyTable.length));
+
+		range_data = [];
+		let rangeActive = false;
+		delta = 0;
+		let shift_counter = 0;
+		for(let i=0;i<frequencyTable.length;i++){
+			delta++;
+			if(
+				(frequencyTable[i] && rangeActive === false)
+				|| (!frequencyTable[i] && rangeActive === true)
+			){
+				rangeActive = !rangeActive;
+				shift_counter++;
+				range_data = range_data.concat(PRIMITIVE[delta - 1]);
+				delta = 0;
+
+			}
+			if(
+				i === frequencyTable.length - 1
+				&& rangeActive
+			){
+				range_data = range_data.concat(PRIMITIVE[delta]);
+				shift_counter++
+			}
+		}
+		range_data = rePlex(shift_counter/2,(Math.ceil(Math.log2(frequencyTable.length))) - 1).concat(range_data);
+
+		if(occupied === frequencyTable.length){
+			dataBuffer.push(0,0);
+			console.log("no palette buckets");
+		}
+		if(Math.min(/*arith_list_data.length,*/range_data.length) < frequencyTable.length){
+			/*if(arith_list_data.length < range_data.length){
+				dataBuffer.push(0,1);
+				dataBuffer.push(...arith_list_data);
+				console.log("list table size",arith_list_data.length,"bits",debug_list);
+			}*
+			/*else{*/
+				dataBuffer.push(1,0);
+				dataBuffer.push(...range_data);
+				console.log("range data size",range_data.length,"bits");
+			/*}*/
+		}
+		else{
+			dataBuffer.push(1,1);
+			dataBuffer.push(...frequencyTable.map(a => !!a));
+			console.log("binary bucked data size",frequencyTable.length,"bits");
+		}
 	}
 
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;

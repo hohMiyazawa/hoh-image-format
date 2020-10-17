@@ -201,7 +201,56 @@ let lossless_encoder = function(data,info,options){
 			m_data = Y_data.concat(I_data).concat(Q_data)
 		}
 		else if(info.pixelFormat === "yiqa"){
-
+			console.info("Starting alpha...");
+			let A_data = encodeChannel_lossless(
+				getPatch(
+					channels[3],width,height,
+					module.x,module.y,
+					trueWidth,
+					trueHeight
+				),
+				{range: 256,name: "alpha",width: trueWidth,height: trueHeight},
+				options,
+				{}
+			)
+			console.info("Starting Y...");
+			const Y_patch = getPatch(
+				channels[0],width,height,
+				module.x,module.y,
+				trueWidth,
+				trueHeight
+			);
+			let Y_data = encodeChannel_lossless(
+				Y_patch,
+				{range: 256,name: "Y",width: trueWidth,height: trueHeight},
+				options,
+				{}
+			)
+			console.info("Starting I...");
+			let I_data = encodeChannel_lossless(
+				getPatch(
+					channels[1],width,height,
+					module.x,module.y,
+					trueWidth,
+					trueHeight
+				),
+				{range: 511,name: "I",width: trueWidth,height: trueHeight},
+				options,
+				{luma: Y_patch,lumaRange: 256}
+			)
+			console.info("Starting Q...");
+			let Q_data = encodeChannel_lossless(
+				getPatch(
+					channels[2],width,height,
+					module.x,module.y,
+					trueWidth ,
+					trueHeight
+				),
+				{range: 511,name: "Q",width: trueWidth,height: trueHeight},
+				options,
+				{luma: Y_patch,lumaRange: 256}
+			)
+			m_data = A_data.concat(Y_data).concat(I_data).concat(Q_data)
 		}
 		else if(info.pixelFormat === "rgb"){
 			console.info("Starting R...");
@@ -275,6 +324,29 @@ let lossless_encoder = function(data,info,options){
 						{}
 					);
 					if(index_data.length < m_data.length){
+						console.info("indexed colour is smaller (encounter order)")
+						m_data = index_data
+					}
+					check.sort((a,b) => a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114 - b[0]* 0.299 - b[1]* 0.587 - b[2] * 0.114);
+					index_data = encodeChannel_lossless(
+						rgb_to_indexed(local_patch,check),
+						{range: check.length,name: "index",width: trueWidth,height: trueHeight,indexed: true,index: check},
+						options,
+						{}
+					);
+					if(index_data.length < m_data.length){
+						console.info("indexed colour is smaller (luma order)")
+						m_data = index_data
+					}
+					check.sort((a,b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2]);
+					index_data = encodeChannel_lossless(
+						rgb_to_indexed(local_patch,check),
+						{range: check.length,name: "index",width: trueWidth,height: trueHeight,indexed: true,index: check},
+						options,
+						{}
+					);
+					if(index_data.length < m_data.length){
+						console.info("indexed colour is smaller (GBR order)")
 						m_data = index_data
 					}
 				}
