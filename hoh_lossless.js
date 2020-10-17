@@ -113,37 +113,6 @@ let lossless_encoder = function(data,info,options){
 
 	console.info("Header written");
 
-	let encodingQueue = [];
-	let blockQueue = [{size: encoding_size,x:0,y:0}];
-	let partitionBits = [];
-	while(blockQueue.length){
-		let last = blockQueue.pop();
-		if(options.optimisePartitioning && last.size/2 >= options.minModuleSize && (blockQueue.length + encodingQueue.length) === 0){
-			partitionBits.push(1);
-			let s = last.size/2;
-			if(height > last.y + s){
-				if(width > last.x + s){
-					blockQueue.push({size: s,x:last.x + s,y:last.y + s})
-				}
-				blockQueue.push({size: s,x:last.x,y:last.y + s})
-			}
-			if(width > last.x + s){
-				blockQueue.push({size: s,x:last.x + s,y:last.y})
-			}
-			blockQueue.push({size: s,x:last.x,y:last.y})
-		}
-		else{
-			partitionBits.push(0);
-			encodingQueue.push(last)
-		}
-	}
-	while(partitionBits.length % BYTE_LENGTH){
-		partitionBits.push(0);
-	}
-	bitBuffer.push(...partitionBits);
-
-	console.info("Partition performed");
-
 	let channel_numbers = {
 		"yiq": 3,
 		"rgb": 3,
@@ -155,13 +124,11 @@ let lossless_encoder = function(data,info,options){
 
 	let channels = deSerialize(data,channel_numbers[info.pixelFormat]);
 
-	let moduleData;
-	moduleData = encodingQueue.map(module => {
+	let perform = function(module){
 		let trueWidth = Math.min(module.size,width - module.x);
 		let trueHeight = Math.min(module.size,height - module.y);
 		let m_data;
 		if(info.pixelFormat === "yiq"){
-			console.info("Starting Y...");
 			const Y_patch = getPatch(
 				channels[0],width,height,
 				module.x,module.y,
@@ -174,7 +141,6 @@ let lossless_encoder = function(data,info,options){
 				options,
 				{}
 			)
-			console.info("Starting I...");
 			let I_data = encodeChannel_lossless(
 				getPatch(
 					channels[1],width,height,
@@ -186,7 +152,6 @@ let lossless_encoder = function(data,info,options){
 				options,
 				{luma: Y_patch,lumaRange: 256}
 			)
-			console.info("Starting Q...");
 			let Q_data = encodeChannel_lossless(
 				getPatch(
 					channels[2],width,height,
@@ -292,7 +257,6 @@ let lossless_encoder = function(data,info,options){
 			rm_data = R_data.concat(G_data).concat(B_data)
 		}
 		else if(info.pixelFormat === "greyscale"){
-			console.info("Starting Y...");
 			let Y_data = encodeChannel_lossless(
 				getPatch(
 					data,width,height,
@@ -353,7 +317,67 @@ let lossless_encoder = function(data,info,options){
 			}
 		}
 		return m_data
+	}
+
+	let encodingQueue = [];
+	let blockQueue = [{size: encoding_size,x:0,y:0,level: 0}];
+	let partitionBits = [];
+	let partitions = 1;
+	while(blockQueue.length){
+		let last = blockQueue.pop();
+		if(options.optimisePartitioning && last.size/2 >= options.minModuleSize){
+			let s = last.size/2;
+			let interQueue = [];
+			if(height > last.y + s){
+				if(width > last.x + s){
+					interQueue.push({size: s,x:last.x + s,y:last.y + s,level: last.level+1});
+					partitions++
+				}
+				interQueue.push({size: s,x:last.x,y:last.y + s,level: last.level+1})
+				partitions++
+			}
+			if(width > last.x + s){
+				interQueue.push({size: s,x:last.x + s,y:last.y,level: last.level+1})
+				partitions++
+			}
+			interQueue.push({size: s,x:last.x,y:last.y,level: last.level+1});
+			let sumSize = 0;
+			interQueue.forEach(module => {
+				module.codingData = perform(module);
+				sumSize += module.codingData.length
+			});
+			if(last.level === 0 || sumSize < last.codingData.length){
+				console.log("division",sumSize,(last.codingData || []).length);
+				partitionBits.push(1);
+				blockQueue = blockQueue.concat(interQueue);
+			}
+			else{
+				partitionBits.push(0);
+				encodingQueue.push(last)
+			}
+		}
+		else{
+			partitionBits.push(0);
+			encodingQueue.push(last)
+		}
+	}
+	while(partitionBits.length % BYTE_LENGTH){
+		partitionBits.push(0);
+	}
+	bitBuffer.push(...partitionBits);
+
+	console.info("Partition performed");
+
+	let moduleData;
+	moduleData = encodingQueue.map(module => {
+		if(module.codingData){
+			return module.codingData
+		}
+		else{
+			return perform(module)
+		}
 	})
+	console.log(moduleData.map(module => module.length));
 
 	console.info("Modules compressed");
 

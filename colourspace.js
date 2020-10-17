@@ -200,7 +200,6 @@ function getPatch(imageData,ww,hh,x,y,width,height){
 		return imageData
 	}
 	let channels = imageData.length/(ww*hh);
-	console.log(channels,"channels");
 	let patch = [];
 	for(let i=0;i<height;i++){
 		let offset = ((y+i) * ww + x)*channels;
