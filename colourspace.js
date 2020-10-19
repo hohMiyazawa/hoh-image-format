@@ -68,6 +68,21 @@ function yiq_to_rgb(imageData){
 	return outBuffer
 }
 
+function Q_limits_from_y(Y){
+	return {
+		min: Math.max(-(Y*2 + 1),-(255 - Y)*2,-255) + 255,
+		max: Math.min((255 - Y)*2,Y*2 + 1,255) + 255
+	}
+}
+
+function I_limits_from_y(Y){
+	//R = Co + Y - (Co>>1)
+	return {
+		min: (- 1 - Y) + 255,
+		max: 510
+	}
+}
+
 
 function yiq_to_rgba(imageData){
 	let outBuffer = [];
