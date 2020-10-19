@@ -123,6 +123,8 @@ let lossless_encoder = function(data,info,options){
 	}
 
 	let channels = deSerialize(data,channel_numbers[info.pixelFormat]);
+	//console.log("pixel 2489",channels[0][2489],channels[1][2489],channels[2][2489]);
+	//throw "pixel 2489";
 
 	let perform = function(module){
 		let trueWidth = Math.min(module.size,width - module.x);

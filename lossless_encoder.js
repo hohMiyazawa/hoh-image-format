@@ -178,6 +178,16 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		},
 		{
+			name: "average_(L-TR)-T",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width && index % width){
+					return Math.floor((Math.floor((data[index - 1] + data[index - width + 1])/2) + data[index - width])/2)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
 			name: "paeth",
 			predict: function(index){
 				if(index % width && index >= width){
@@ -237,6 +247,66 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 				return 0
 			},
 			count: 0
+		},
+		{
+			name: "average_L_L-TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((data[index - 1]*2 + data[index - width - 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_L-TL_TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((data[index - 1] + data[index - width - 1]*2)/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TL_TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((data[index - width] + data[index - width - 1]*2)/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T_T-TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((data[index - width]*2 + data[index - width - 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T_T-TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((data[index - width]*2 + data[index - width + 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TR_TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((data[index - width] + data[index - width + 1]*2)/3)
+				}
+				return 0
+			},
+			count: 0
 		}
 	];
 	let translationTable = new Array(range);
@@ -265,9 +335,8 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 
 		data = data.map(value => translationTable[value]);
 
-		range = delta;
-
 		let occupied = frequencyTable.filter(a => a).length;
+		range = occupied;
 
 		const PRIMITIVE = buildBook(primitive_huffman(frequencyTable.length));
 
@@ -361,15 +430,84 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 
 	const histogramSize = 32;
 
-	let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1))
+	let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1));
 
 	let enc = new ArithmeticEncoder(NUM_OF_BITS, writer);
+	//let bolivar_debug = [];
 	data.forEach((value,index) => {
 		let predi = predictors[bestRow[index % width]].predict(index);
 		let predicted = value - predi + range - 1;
 
 		let lowest = 0 - predi + range - 1;
 		let highest = (range - 1) - predi + range - 1;
+		if(hasCrossPrediction){
+			if(channel_options.name === "I"){
+				/*let lower_absolute = Y_I_lower[context_data.luma[index]];
+				while(!translationTable[lower_absolute]){
+					lower_absolute++
+				}
+				let translated = translationTable[lower_absolute - 1];
+				lowest = translated - predi + range - 1;*/
+
+				let upper_absolute = Y_I_upper[context_data.luma[index]];
+				while(translationTable[upper_absolute] === undefined){
+					upper_absolute--;
+				}
+				translated = translationTable[upper_absolute];
+				highest = translated - predi + range - 1;
+			}
+			else if(channel_options.name === "Q"){
+				/*let lower_absolute = Y_Q_lower[context_data.luma[index]];
+				while(!translationTable[lower_absolute]){
+					lower_absolute++
+				}
+				let translated = translationTable[lower_absolute - 1];
+				lowest = translated - predi + range - 1;*/
+
+				let upper_absolute = Y_Q_upper[context_data.luma[index]];
+				while(translationTable[upper_absolute] === undefined){
+					upper_absolute--;
+				}
+				translated = translationTable[upper_absolute];
+				highest = translated - predi + range - 1;
+/*
+//20496
+if(index === 10000){
+	//console.log("pixel 2677",lower_absolute,upper_absolute,translationTable[lower_absolute]-1,translationTable[upper_absolute],range);
+	console.log("spring?",Y_Q_lower[context_data.luma[index]]);
+	console.log("index??",translationTable[lower_absolute - 1],translationTable);
+	console.log("lowest???",lowest);
+	console.log("predi????",- predi + range - 1,predi,range);
+	console.log("data?????",data[index - 1],data[index - 1 - width],data[index - width],data[index - width + 1]);
+	//console.log("luma pixel 2677",context_data.luma[index],context_data.luma);
+}*/
+			}
+			if(!lowest && lowest !== 0){
+				throw "what"
+			}
+			if(!highest && highest !== 0){
+				throw "what"
+			}
+		}
+try{
+		/*if(hasCrossPrediction){
+			if(channel_options.name === "Q"){
+				let lims = Q_limits_from_y(context_data.luma[index]);
+				if(index === 0){
+					console.log(lims,lowest,highest,(translationTable[lims.min] || 0) - predi + range - 1,(translationTable[lims.max] || range) - predi + range - 1,translationTable);
+				}
+				lowest = Math.max(lowest,(translationTable[lims.min] || 0) - predi + range - 1);
+				highest = Math.min(highest,(translationTable[lims.max] || range) - predi + range - 1);
+			}
+			else if(channel_options.name === "I"){
+				let lims = I_limits_from_y(context_data.luma[index]);
+				if(index === 0){
+					console.log(lims,lowest,highest,(translationTable[lims.min] || 0) - predi + range - 1,(translationTable[lims.max] || range) - predi + range - 1,translationTable);
+				}
+				lowest = Math.max(lowest,(translationTable[lims.min] || 0) - predi + range - 1);
+				highest = Math.min(highest,(translationTable[lims.max] || range) - predi + range - 1);
+			}
+		}*/
 
 		let localChances = [];
 		for(let i=0;i<chances.length;i++){
@@ -413,6 +551,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			}
 			total += localChances[i]
 		}
+		//bolivar_debug.push(-Math.log2((getHigh - getLow)/total));
 		enc.write(
 			{
 				total: total,
@@ -478,10 +617,40 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 
 		chances[predicted]++;
+}
+catch(e){
+	console.log(e,channel_options.name);
+	console.log("value",value);
+	console.log("luma",context_data.luma[index]);
+	console.log("index",index);
+	console.log("lookup values",Y_Q_lower[context_data.luma[index]],Y_Q_upper[context_data.luma[index]]);
+	console.log("limits",
+		0,
+		(range - 1),
+		lowest,
+		highest
+	);
+	//console.log("I context",context_data.chroma[index]);
+	console.log("table",translationTable);
+	throw "terminated";
+}
 	});
 	enc.finish();
 	
 	//console.log("first bytes of stream",dePlex(dataBuffer.slice(0,8)),dePlex(dataBuffer.slice(8,16)),dePlex(dataBuffer.slice(16,24)));
+
+	/*let bolivar_canvas = document.getElementById("expensive");
+	bolivar_canvas.width = width;
+	bolivar_canvas.height = height;
+	let bolivar_ctx = bolivar_canvas.getContext("2d");
+	for(let j=0;j<height;j++){
+		for(let i=0;i<height;i++){
+			let boli_val = Math.round(bolivar_debug[j*height + i] * 15);
+			bolivar_ctx.fillStyle = "rgb(" + boli_val + "," + boli_val + ","+ boli_val + ")";
+			bolivar_ctx.fillRect(i,j,1,1);
+		}
+	}*/
+
 
 	dataBuffer = encodeVarint(dataBuffer.length,BYTE_LENGTH).concat(dataBuffer);
 	while(dataBuffer.length % BYTE_LENGTH){
@@ -491,7 +660,7 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	while(dataBuffer.length > (BYTE_LENGTH - 1)){
 		encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
 	}
-	console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
+	//console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
 	console.log(channel_options.name,encodedData.length,"bytes");
 	return encodedData
 }

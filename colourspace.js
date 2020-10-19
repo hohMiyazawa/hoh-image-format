@@ -68,6 +68,7 @@ function yiq_to_rgb(imageData){
 	return outBuffer
 }
 
+/*
 function Q_limits_from_y(Y){
 	return {
 		min: Math.max(-(Y*2 + 1),-(255 - Y)*2,-255) + 255,
@@ -76,12 +77,41 @@ function Q_limits_from_y(Y){
 }
 
 function I_limits_from_y(Y){
-	//R = Co + Y - (Co>>1)
 	return {
 		min: (- 1 - Y) + 255,
 		max: 510
 	}
-}
+}*/
+const Y_I_lower = new Array(256).fill(0).map((_,index) => {
+	if(index < 64){
+		return 252 - index*4
+	}
+	if(index >= 192){
+		return 3 + (index - 192)*4
+	}
+	return 0
+});
+const Y_I_upper = new Array(256).fill(0).map((_,index) => {
+	if(index < 64){
+		return 260 + index*4
+	}
+	if(index >= 192){
+		return 507 - (index - 192)*4
+	}
+	return 510
+});
+const Y_Q_lower = new Array(256).fill(0).map((_,index) => {
+	if(index < 128){
+		return 254 - index*2
+	}
+	return 1 + (index - 128)*2
+});
+const Y_Q_upper = new Array(256).fill(0).map((_,index) => {
+	if(index < 128){
+		return 256 + index*2
+	}
+	return 509 - (index - 128)*2
+});
 
 
 function yiq_to_rgba(imageData){
@@ -223,9 +253,9 @@ function getPatch(imageData,ww,hh,x,y,width,height){
 	return patch
 }
 
-function check_index(imageData){
+function check_index(imageData,limit){
 	let list = [];
-	const index_limit = Math.min(256,imageData.length/6);
+	const index_limit = Math.min(limit,imageData.length/6);
 	for(let i=0;i<imageData.length;i += 3){
 		if(
 			!list.find(
@@ -236,6 +266,29 @@ function check_index(imageData){
 		){
 			list.push(
 				[imageData[i + 0],imageData[i + 1],imageData[i + 2]]
+			)
+		}
+		if(list.length > index_limit){
+			return null
+		}
+	}
+	return list
+}
+
+function check_indexa(imageData,limit,full){
+	let list = [];
+	const index_limit = Math.min(limit,imageData.length/8)
+	for(let i=0;i<imageData.length;i += 4){
+		if(
+			!list.find(
+				ele => (ele[0] === imageData[i + 0]
+					&& ele[1] === imageData[i + 1]
+					&& ele[2] === imageData[i + 2]
+					&& ele[3] === imageData[i + 3]) || (full && ele[3] === 0 && imageData[i + 3] === 0)
+			)
+		){
+			list.push(
+				[imageData[i + 0],imageData[i + 1],imageData[i + 2],imageData[i + 3]]
 			)
 		}
 		if(list.length > index_limit){

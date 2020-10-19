@@ -259,4 +259,37 @@ let analyse = function(data,info,options){
 	document.getElementById("bitimage1").innerText = "cost: " + Math.ceil(cost1) + " bytes";
 	document.getElementById("bitimage2").innerText = "cost: " + Math.ceil(cost2) + " bytes";
 	document.getElementById("bitimage3").innerText = "cost: " + Math.ceil(cost3) + " bytes";
+
+	let indexsize = check_indexa(data,1024,false);
+	if(indexsize){
+		document.getElementById("rangecost").innerText += "\nonly " + indexsize.length + " unique colours in image";
+	};
+
+	let tally = new Array(511).fill(0);
+	let tally_luma_only = new Array(511).fill(0);
+
+	channels[2].forEach((val,index) => {
+		let allowed_from_Y = valMap_q[channels[0][index]];
+		let allowed_from_I = valMap_iq[channels[1][index]];
+		let count = 0;
+		for(let i=0;i<511;i++){
+			if(allowed_from_Y[i] && allowed_from_I[i]){
+				count++
+			}
+		}
+		tally[count]++;
+		let count_luma_only = 0;
+		for(let i=0;i<511;i++){
+			if(allowed_from_Y[i]){
+				count_luma_only++
+			}
+		}
+		tally_luma_only[count_luma_only]++
+	});
+
+	let tally_save = tally.reduce((acc,val,index) => (index ? acc + Math.log2(index)*val : 0),0)/8;
+	let tally_save_luma_only = tally_luma_only.reduce((acc,val,index) => (index ? acc + Math.log2(index)*val : 0),0)/8;
+
+	console.log("tally",tally,tally_save,info.width*info.height*10/8 - tally_save,tally_save_luma_only - tally_save);
+	console.log("tally_luma_only",tally_luma_only,tally_save_luma_only,info.width*info.height*10/8 - tally_save_luma_only)
 }

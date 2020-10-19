@@ -119,7 +119,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	const height = channel_options.height;
 	let range = channel_options.range;
 
-	console.log("first bytes of stream",data[0],data[1],data[2]);
+	//console.log("first bytes of stream",data[0],data[1],data[2]);
 
 	let currentIndex = 1;
 	let bitBuffer = rePlex(data[0]);
@@ -246,6 +246,16 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 			count: 0
 		},
 		{
+			name: "average_(L-TR)-T",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width && index % width){
+					return Math.floor((Math.floor((decodedData[index - 1] + decodedData[index - width + 1])/2) + decodedData[index - width])/2)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
 			name: "paeth",
 			predict: function(index){
 				if(index % width && index >= width){
@@ -301,6 +311,66 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 				}
 				else if(index >= width){
 					return decodedData[index - width]
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_L_L-TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((decodedData[index - 1]*2 + decodedData[index - width - 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_L-TL_TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((decodedData[index - 1] + decodedData[index - width - 1]*2)/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TL_TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((decodedData[index - width] + decodedData[index - width - 1]*2)/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T_T-TL",
+			predict: function(index){
+				if(index % width && index >= width){
+					return Math.floor((decodedData[index - width]*2 + decodedData[index - width - 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T_T-TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((decodedData[index - width]*2 + decodedData[index - width + 1])/3)
+				}
+				return 0
+			},
+			count: 0
+		},
+		{
+			name: "average_T-TR_TR",
+			predict: function(index){
+				if((index % width) < (width - 1) && index >= width){
+					return Math.floor((decodedData[index - width] + decodedData[index - width + 1]*2)/3)
 				}
 				return 0
 			},
@@ -436,6 +506,49 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 
 		let lowest = 0 - predi + range - 1;
 		let highest = (range - 1) - predi + range - 1;
+		if(hasCrossPrediction){
+			let lower_absolute;
+			let upper_absolute;
+			if(channel_options.name === "I"){
+				lower_absolute = Y_I_lower[context_data.luma[index]];
+				upper_absolute = Y_I_upper[context_data.luma[index]];
+			}
+			else if(channel_options.name === "Q"){
+				lower_absolute = Y_Q_lower[context_data.luma[index]];
+				upper_absolute = Y_Q_upper[context_data.luma[index]];
+			}
+			let debug1;
+			/*for(let i=0;i<translationTable.length;i++){
+				if(translationTable[i] >= lower_absolute){
+					debug1 = i;
+					lowest = i - predi + range - 1;
+					break
+				}
+			}*/
+			let debug2;
+			for(let i=translationTable.length;i--;){
+				if(translationTable[i] <= upper_absolute){
+					debug2 = i;
+					highest = i - predi + range - 1;
+					break
+				}
+			}
+			if(index === 10000 && channel_options.name === "Q"){
+				console.log("help",translationTable,upper_absolute,-predi +range - 1);
+				console.log("orig",(range - 1),(range - 1) - predi + range - 1);
+				console.log("spring?",lower_absolute);
+				console.log("index??",debug1,translationTable);
+				console.log("lowest???",lowest);
+				console.log("predi????",- predi + range - 1,predi,range);
+				console.log("data?????",decodedData[index - 1],decodedData[index - 1 - width],decodedData[index - width],decodedData[index - width + 1]);
+			}
+			if(!lowest && lowest !== 0){
+				throw "what"
+			}
+			if(!highest && highest !== 0){
+				throw "what"
+			}
+		}
 
 		let localChances = [];
 		for(let i=0;i<chances.length;i++){
