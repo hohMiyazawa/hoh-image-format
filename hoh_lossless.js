@@ -280,7 +280,7 @@ let lossless_encoder = function(data,info,options){
 					trueWidth,
 					trueHeight
 				));
-				let check = check_index(local_patch);
+				let check = check_index(local_patch,256);
 				if(check){
 					let index_data = encodeChannel_lossless(
 						rgb_to_indexed(local_patch,check),
