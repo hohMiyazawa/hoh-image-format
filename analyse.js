@@ -227,7 +227,7 @@ let analyse = function(data,info,options){
 		}
 	}*/
 	console.log("entropy",ent/8);
-	document.getElementById("rangecost").innerText = ent/8;
+	document.getElementById("rangecost").innerText = "range-only encoding cost: " + Math.ceil(ent/8) + " bytes";
 
 
 	let valMap_iq = new Array(511).fill(0).map(_ => new Array(511).fill(0));
@@ -256,4 +256,7 @@ let analyse = function(data,info,options){
 	console.info("I-Q bitimage");
 	let cost3= encode_bitimage(valMap_iq.flat().map(a => +!!a),511,511).length/8;
 	console.log("full cost",cost1 + cost2 + cost3);
+	document.getElementById("bitimage1").innerText = "cost: " + Math.ceil(cost1) + " bytes";
+	document.getElementById("bitimage2").innerText = "cost: " + Math.ceil(cost2) + " bytes";
+	document.getElementById("bitimage3").innerText = "cost: " + Math.ceil(cost3) + " bytes";
 }

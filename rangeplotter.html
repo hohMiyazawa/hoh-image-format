@@ -36,22 +36,24 @@ body{
 		<div class="canvasContainer">
 			<h2>Y-I</h2>
 			<canvas id="render_i" width="0" height="0"></canvas>
+			<p id="bitimage1"></p>
 		</div>
 		<div class="canvasContainer">
 			<h2>Y-Q</h2>
 			<canvas id="render_q" width="0" height="0"></canvas>
+			<p id="bitimage2"></p>
 		</div>
 		<div class="canvasContainer">
 			<h2>I-Q</h2>
 			<canvas id="render_chroma" width="0" height="0"></canvas>
+			<p id="bitimage3"></p>
 		</div>
+		<hr>
 		<p id="rangecost"></p>
 		<hr>
-		<hr>
-		<h3>Encode</h3>
+		<h3>Analyse</h3>
 		<input type="file" id="imageInput"><br>
 		<button id="encodeButton">Analyse</button>
-		<h4>Parameters:</h4>
 		<script>
 let saveByteArray = (function(){
 	let a = document.createElement("a");
