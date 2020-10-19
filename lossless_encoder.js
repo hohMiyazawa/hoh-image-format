@@ -442,12 +442,12 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 		let highest = (range - 1) - predi + range - 1;
 		if(hasCrossPrediction){
 			if(channel_options.name === "I"){
-				/*let lower_absolute = Y_I_lower[context_data.luma[index]];
-				while(!translationTable[lower_absolute]){
+				let lower_absolute = Y_I_lower[context_data.luma[index]];
+				while(translationTable[lower_absolute] === undefined){
 					lower_absolute++
 				}
-				let translated = translationTable[lower_absolute - 1];
-				lowest = translated - predi + range - 1;*/
+				let translated = translationTable[lower_absolute];
+				lowest = translated - predi + range - 1;
 
 				let upper_absolute = Y_I_upper[context_data.luma[index]];
 				while(translationTable[upper_absolute] === undefined){
@@ -457,12 +457,12 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 				highest = translated - predi + range - 1;
 			}
 			else if(channel_options.name === "Q"){
-				/*let lower_absolute = Y_Q_lower[context_data.luma[index]];
-				while(!translationTable[lower_absolute]){
+				let lower_absolute = Y_Q_lower[context_data.luma[index]];
+				while(translationTable[lower_absolute] === undefined){
 					lower_absolute++
 				}
-				let translated = translationTable[lower_absolute - 1];
-				lowest = translated - predi + range - 1;*/
+				let translated = translationTable[lower_absolute];
+				lowest = translated - predi + range - 1;
 
 				let upper_absolute = Y_Q_upper[context_data.luma[index]];
 				while(translationTable[upper_absolute] === undefined){
@@ -483,6 +483,7 @@ if(index === 10000){
 }*/
 			}
 			if(!lowest && lowest !== 0){
+				console.log("asdfa",lowest);
 				throw "what"
 			}
 			if(!highest && highest !== 0){

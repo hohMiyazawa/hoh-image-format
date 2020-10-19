@@ -518,13 +518,13 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 				upper_absolute = Y_Q_upper[context_data.luma[index]];
 			}
 			let debug1;
-			/*for(let i=0;i<translationTable.length;i++){
+			for(let i=0;i<translationTable.length;i++){
 				if(translationTable[i] >= lower_absolute){
 					debug1 = i;
 					lowest = i - predi + range - 1;
 					break
 				}
-			}*/
+			}
 			let debug2;
 			for(let i=translationTable.length;i--;){
 				if(translationTable[i] <= upper_absolute){
@@ -533,7 +533,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 					break
 				}
 			}
-			if(index === 10000 && channel_options.name === "Q"){
+			/*if(index === 10000 && channel_options.name === "Q"){
 				console.log("help",translationTable,upper_absolute,-predi +range - 1);
 				console.log("orig",(range - 1),(range - 1) - predi + range - 1);
 				console.log("spring?",lower_absolute);
@@ -541,7 +541,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 				console.log("lowest???",lowest);
 				console.log("predi????",- predi + range - 1,predi,range);
 				console.log("data?????",decodedData[index - 1],decodedData[index - 1 - width],decodedData[index - width],decodedData[index - width + 1]);
-			}
+			}*/
 			if(!lowest && lowest !== 0){
 				throw "what"
 			}
