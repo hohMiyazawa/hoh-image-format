@@ -430,7 +430,13 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 
 	const histogramSize = 32;
 
-	let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1));
+	const histogram_e_range = 15;
+
+	//let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1));
+
+	let histogram_e = new Array(range).fill(1);
+
+	//let cheatMap = cheatinfo.map(lum => lum.filter((value,index) => translationTable[index] !== undefined));
 
 	let enc = new ArithmeticEncoder(NUM_OF_BITS, writer);
 	//let bolivar_debug = [];
@@ -490,6 +496,21 @@ if(index === 10000){
 				throw "what"
 			}
 		}
+		if(hasCrossPrediction && channel_options.name === "Q"){
+			let lower_absolute = I_Q_lower[context_data.chroma[index]];
+			while(translationTable[lower_absolute] === undefined){
+				lower_absolute++
+			}
+			let translated = translationTable[lower_absolute];
+			lowest = Math.max(lowest,translated - predi + range - 1);
+
+			let upper_absolute = I_Q_upper[context_data.chroma[index]];
+			while(translationTable[upper_absolute] === undefined){
+				upper_absolute--;
+			}
+			translated = translationTable[upper_absolute];
+			highest = Math.min(highest,translated - predi + range - 1);
+		}
 try{
 		/*if(hasCrossPrediction){
 			if(channel_options.name === "Q"){
@@ -512,11 +533,16 @@ try{
 
 		let localChances = [];
 		for(let i=0;i<chances.length;i++){
-			if(i >= lowest && i <= highest){
+			if(
+				i >= lowest
+				&& i <= highest
+				//&& (channel_options.name !== "I" || cheatMap[context_data.luma[index]][i + predi - range + 1])
+			){
 				localChances.push(
 					Math.round(
 						Math.pow(chances[i],0.9)
-						* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+						* Math.cbrt(histogram_e[i + predi - range + 1])
 						* (hasCrossPrediction ? Math.cbrt(
 							origMap[
 								Math.floor((index % width) / crossPredictionSize)
@@ -553,6 +579,7 @@ try{
 			total += localChances[i]
 		}
 		//bolivar_debug.push(-Math.log2((getHigh - getLow)/total));
+try{
 		enc.write(
 			{
 				total: total,
@@ -561,6 +588,18 @@ try{
 			},
 			predicted
 		)
+}
+catch(e){
+	console.log(e);
+	console.log("fakeTable",{
+				total: total,
+				getLow: getLow,
+				getHigh: getHigh
+			});
+	console.log(chances,localChances);
+	console.log("cheatmap",cheatMap[context_data.luma[index]]);
+	throw "writer error";
+}
 
 
 		let record = 1e6;
@@ -575,10 +614,32 @@ try{
 		bestRow[index % width] = record_index;
 		predictors[record_index].count++;
 
-		histograms[Math.floor((index % width) / histogramSize)][value]++;
+		/*histograms[Math.floor((index % width) / histogramSize)][value]++;
 		let negaIndex = index - histogramSize*width;
 		if(negaIndex >= 0){
 			histograms[Math.floor((index % width) / histogramSize)][data[negaIndex]]--
+		}*/
+		let nextPix = index + 1;
+		if(nextPix % width === 0){
+			histogram_e = new Array(range).fill(1);
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= 31 && (nextPix - i*width + j) >= 0;i++){
+					histogram_e[data[nextPix - i*width + j]]++
+				}
+			}
+		}
+		else{
+			histogram_e[data[index]]++
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histogram_e[data[nextPix - i*width + histogram_e_range]]++
+				}
+			}
+			if((nextPix % width) > histogram_e_range){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - histogram_e_range - 1) >= 0;i++){
+					histogram_e[data[nextPix - i*width - histogram_e_range - 1]]--
+				}
+			}
 		}
 
 		if(hasCrossPrediction){
@@ -622,6 +683,7 @@ try{
 catch(e){
 	console.log(e,channel_options.name);
 	console.log("value",value);
+	console.log("value_real",value);
 	console.log("luma",context_data.luma[index]);
 	console.log("index",index);
 	console.log("lookup values",Y_Q_lower[context_data.luma[index]],Y_Q_upper[context_data.luma[index]]);

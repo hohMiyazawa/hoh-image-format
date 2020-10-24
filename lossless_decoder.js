@@ -496,8 +496,11 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	let chances = new Array(2*range-1).fill(1);
 
 	const histogramSize = 32;
+	const histogram_e_range = 15;
 
-	let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1))
+	//let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1))
+
+	let histogram_e = new Array(range).fill(1);
 
 	let dec = new ArithmeticDecoder(NUM_OF_BITS, reader);
 
@@ -549,6 +552,22 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 				throw "what"
 			}
 		}
+		if(hasCrossPredictionColour && channel_options.name === "Q"){
+			let lower_absolute = I_Q_lower[context_data.chroma[index]];
+			let upper_absolute = I_Q_upper[context_data.chroma[index]];
+			for(let i=0;i<translationTable.length;i++){
+				if(translationTable[i] >= lower_absolute){
+					lowest = Math.max(lowest,i - predi + range - 1);
+					break
+				}
+			}
+			for(let i=translationTable.length;i--;){
+				if(translationTable[i] <= upper_absolute){
+					highest = Math.min(highest,i - predi + range - 1);
+					break
+				}
+			}
+		}
 
 		let localChances = [];
 		for(let i=0;i<chances.length;i++){
@@ -556,7 +575,8 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 				localChances.push(
 					Math.round(
 						Math.pow(chances[i],0.9)
-						* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
+						* Math.cbrt(histogram_e[i + predi - range + 1])
 						* (hasCrossPrediction ? Math.cbrt(
 							origMap[
 								Math.floor((index % width) / crossPredictionSize)
@@ -599,10 +619,34 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		};
 		bestRow[index % width] = record_index;
 
-		histograms[Math.floor((index % width) / histogramSize)][value]++;
+		/*histograms[Math.floor((index % width) / histogramSize)][value]++;
 		let negaIndex = index - histogramSize*width;
 		if(negaIndex >= 0){
 			histograms[Math.floor((index % width) / histogramSize)][decodedData[negaIndex]]--
+		}*/
+		decodedData.push(value);
+
+		let nextPix = index + 1;
+		if(nextPix % width === 0){
+			histogram_e = new Array(range).fill(1);
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= 31 && (nextPix - i*width + j) >= 0;i++){
+					histogram_e[decodedData[nextPix - i*width + j]]++
+				}
+			}
+		}
+		else{
+			histogram_e[decodedData[index]]++
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histogram_e[decodedData[nextPix - i*width + histogram_e_range]]++
+				}
+			}
+			if((nextPix % width) > histogram_e_range){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - histogram_e_range - 1) >= 0;i++){
+					histogram_e[decodedData[nextPix - i*width - histogram_e_range - 1]]--
+				}
+			}
 		}
 
 		if(hasCrossPrediction){
@@ -641,7 +685,6 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 			}
 		}
 
-		decodedData.push(value);
 		chances[predicted]++
 	}
 

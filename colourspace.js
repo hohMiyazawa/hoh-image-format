@@ -112,6 +112,18 @@ const Y_Q_upper = new Array(256).fill(0).map((_,index) => {
 	}
 	return 509 - (index - 128)*2
 });
+const I_Q_lower = new Array(511).fill(0).map((_,index) => {
+	if(index < 256){
+		return 128 - Math.ceil(index/2)
+	}
+	return 1 + Math.floor((index - 256)/2)
+});
+const I_Q_upper = new Array(511).fill(0).map((_,index) => {
+	if(index < 256){
+		return 383 + Math.floor(index/2)
+	}
+	return 510 - Math.ceil((index - 256)/2)
+});
 
 
 function yiq_to_rgba(imageData){
