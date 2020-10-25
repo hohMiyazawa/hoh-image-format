@@ -431,10 +431,62 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	const histogramSize = 32;
 
 	const histogram_e_range = 15;
+	const histogram_e_range_narrow = 8;
+	//let histogram_e = new Array(range).fill(1);
 
 	//let histograms = new Array(Math.ceil(width/histogramSize)).fill(0).map(a => new Array(range).fill(1));
 
-	let histogram_e = new Array(range).fill(1);
+	let histograms = [
+		{
+			name: "regular",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "null",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "shallow",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "global",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "right",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "left",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "narrow",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		},
+		{
+			name: "right_shallow",
+			histogram: new Array(range).fill(1),
+			total: range,
+			count: 0
+		}
+	];
+	let pref_histogram = new Array(width).fill(0);
 
 	//let cheatMap = cheatinfo.map(lum => lum.filter((value,index) => translationTable[index] !== undefined));
 
@@ -542,7 +594,8 @@ try{
 					Math.round(
 						Math.pow(chances[i],0.9)
 						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
-						* Math.cbrt(histogram_e[i + predi - range + 1])
+						//* Math.cbrt(histogram_e[i + predi - range + 1])
+						* Math.cbrt(histograms[pref_histogram[index % width]].histogram[i + predi - range + 1])
 						* (hasCrossPrediction ? Math.cbrt(
 							origMap[
 								Math.floor((index % width) / crossPredictionSize)
@@ -619,7 +672,7 @@ catch(e){
 		if(negaIndex >= 0){
 			histograms[Math.floor((index % width) / histogramSize)][data[negaIndex]]--
 		}*/
-		let nextPix = index + 1;
+		/*let nextPix = index + 1;
 		if(nextPix % width === 0){
 			histogram_e = new Array(range).fill(1);
 			for(let j=0;j<=histogram_e_range;j++){
@@ -640,7 +693,157 @@ catch(e){
 					histogram_e[data[nextPix - i*width - histogram_e_range - 1]]--
 				}
 			}
+		}*/
+		let nextPix = index + 1;
+		if(nextPix % width === 0){
+			histograms[0].histogram = new Array(range).fill(1);
+			histograms[0].total = range;
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + j) >= 0;i++){
+					histograms[0].histogram[data[nextPix - i*width + j]]++
+					histograms[0].total++;
+				}
+			}
+			histograms[2].histogram = new Array(range).fill(1);
+			histograms[2].total = range;
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= (histogram_e_range + 1) && (nextPix - i*width + j) >= 0;i++){
+					histograms[2].histogram[data[nextPix - i*width + j]]++
+					histograms[2].total++;
+				}
+			}
+			histograms[4].histogram = new Array(range).fill(1);
+			histograms[4].total = range;
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + j) >= 0;i++){
+					histograms[4].histogram[data[nextPix - i*width + j]]++
+					histograms[4].total++;
+				}
+			}
+			histograms[5].histogram = new Array(range).fill(1);
+			histograms[5].total = range;
+			for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width) >= 0;i++){
+				histograms[5].histogram[data[nextPix - i*width]]++
+				histograms[5].total++;
+			}
+			histograms[6].histogram = new Array(range).fill(1);
+			histograms[6].total = range;
+			for(let j=0;j<=histogram_e_range_narrow;j++){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + j) >= 0;i++){
+					histograms[6].histogram[data[nextPix - i*width + j]]++
+					histograms[6].total++;
+				}
+			}
+			histograms[7].histogram = new Array(range).fill(1);
+			histograms[7].total = range;
+			for(let j=0;j<=histogram_e_range;j++){
+				for(let i=1;i <= (histogram_e_range + 1) && (nextPix - i*width + j) >= 0;i++){
+					histograms[7].histogram[data[nextPix - i*width + j]]++
+					histograms[7].total++;
+				}
+			}
 		}
+		else{
+			histograms[0].histogram[data[index]]++
+			histograms[0].total++;
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histograms[0].histogram[data[nextPix - i*width + histogram_e_range]]++
+					histograms[0].total++;
+				}
+			}
+			if((nextPix % width) > histogram_e_range){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - histogram_e_range - 1) >= 0;i++){
+					histograms[0].histogram[data[nextPix - i*width - histogram_e_range - 1]]--
+					histograms[0].total--
+				}
+			}
+			histograms[2].histogram[data[index]]++
+			histograms[2].total++;
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histograms[2].histogram[data[nextPix - i*width + histogram_e_range]]++
+					histograms[2].total++;
+				}
+			}
+			if((nextPix % width) > histogram_e_range){
+				for(let i=0;i <= (histogram_e_range + 1) && (nextPix - i*width - histogram_e_range - 1) >= 0;i++){
+					histograms[2].histogram[data[nextPix - i*width - histogram_e_range - 1]]--
+					histograms[2].total--
+				}
+			}
+			histograms[4].histogram[data[index]]++
+			histograms[4].total++;
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histograms[4].histogram[data[nextPix - i*width + histogram_e_range]]++
+					histograms[4].total++;
+				}
+			}
+			if((nextPix % width) > 0){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - 1) >= 0;i++){
+					histograms[4].histogram[data[nextPix - i*width - 1]]--
+					histograms[4].total--
+				}
+			}
+			histograms[5].histogram[data[index]]++
+			histograms[5].total++;
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width) >= 0;i++){
+					histograms[5].histogram[data[nextPix - i*width]]++
+					histograms[5].total++;
+				}
+			}
+			if((nextPix % width) > histogram_e_range){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - histogram_e_range - 1) >= 0;i++){
+					histograms[5].histogram[data[nextPix - i*width - histogram_e_range - 1]]--
+					histograms[5].total--
+				}
+			}
+			histograms[6].histogram[data[index]]++
+			histograms[6].total++;
+			if(width - (nextPix % width) >= histogram_e_range_narrow){
+				for(let i=1;i <= (histogram_e_range*2 + 1) && (nextPix - i*width + histogram_e_range_narrow) >= 0;i++){
+					histograms[6].histogram[data[nextPix - i*width + histogram_e_range_narrow]]++
+					histograms[6].total++;
+				}
+			}
+			if((nextPix % width) > histogram_e_range_narrow){
+				for(let i=0;i <= (histogram_e_range*2 + 1) && (nextPix - i*width - histogram_e_range_narrow - 1) >= 0;i++){
+					histograms[6].histogram[data[nextPix - i*width - histogram_e_range_narrow - 1]]--
+					histograms[6].total--
+				}
+			}
+			histograms[7].histogram[data[index]]++
+			histograms[7].total++;
+			if(width - (nextPix % width) >= histogram_e_range){
+				for(let i=1;i <= (histogram_e_range + 1) && (nextPix - i*width + histogram_e_range) >= 0;i++){
+					histograms[7].histogram[data[nextPix - i*width + histogram_e_range]]++
+					histograms[7].total++;
+				}
+			}
+			if((nextPix % width) > histogram_e_range_narrow){
+				for(let i=0;i <= (histogram_e_range + 1) && (nextPix - i*width - histogram_e_range_narrow - 1) >= 0;i++){
+					histograms[7].histogram[data[nextPix - i*width - histogram_e_range_narrow - 1]]--
+					histograms[7].total--
+				}
+			}
+		}
+		histograms[3].histogram[data[index]]++;
+		histograms[3].total++;
+//
+		histograms[pref_histogram[index % width]].count++;
+
+		let h_record = histograms[0].histogram[value]/histograms[0].total;
+		let h_record_index = 0;
+		for(let i=1;i<histograms.length;i++){
+			let temt_rec = histograms[i].histogram[value]/histograms[i].total;
+			if(temt_rec > h_record){
+				h_record = temt_rec;
+				h_record_index = i
+			}
+		}
+		pref_histogram[index % width] = h_record_index
 
 		if(hasCrossPrediction){
 			origMap[
@@ -681,6 +884,7 @@ catch(e){
 		chances[predicted]++;
 }
 catch(e){
+	console.log("histograms",histograms);
 	console.log(e,channel_options.name);
 	console.log("value",value);
 	console.log("value_real",value);
@@ -724,6 +928,7 @@ catch(e){
 		encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
 	}
 	//console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
+	console.log("histogram modes",histograms);
 	console.log(channel_options.name,encodedData.length,"bytes");
 	return encodedData
 }
