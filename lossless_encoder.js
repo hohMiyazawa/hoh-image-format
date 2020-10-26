@@ -666,14 +666,13 @@ catch(e){
 				getHigh: getHigh
 			});
 	console.log(chances,localChances);
-	console.log("cheatmap",cheatMap[context_data.luma[index]]);
 	throw "writer error";
 }
 
 
-		let record = 1e6;
+		/*let record = Math.abs(value - predictors[0].predict(index));
 		let record_index = 0;
-		for(let i=0;i<predictors.length;i++){
+		for(let i=1;i<predictors.length;i++){
 			let probability = Math.abs(value - predictors[i].predict(index));
 			if(probability < record){
 				record = probability;
@@ -681,7 +680,33 @@ catch(e){
 			}
 		};
 		bestRow[index % width] = record_index;
-		predictors[record_index].count++;
+		predictors[record_index].count++;*/
+		if(index % width === 0){
+			let record = Math.abs(value - predictors[0].predict(index));
+			let record_index = 0;
+			for(let i=1;i<predictors.length;i++){
+				let probability = Math.abs(value - predictors[i].predict(index));
+				if(probability < record){
+					record = probability;
+					record_index = i;
+				}
+			};
+			bestRow[index % width] = record_index;
+			predictors[record_index].count++;
+		}
+		if(index >= width && (index + 1) % width !== 0){
+			let record = Math.abs(value - predictors[0].predict(index)) + Math.abs(data[index - width + 1] - predictors[0].predict(index - width + 1));
+			let record_index = 0;
+			for(let i=1;i<predictors.length;i++){
+				let probability = Math.abs(value - predictors[i].predict(index)) + Math.abs(data[index - width + 1] - predictors[i].predict(index - width + 1));
+				if(probability < record){
+					record = probability;
+					record_index = i;
+				}
+			};
+			bestRow[index % width + 1] = record_index;
+			predictors[record_index].count++;
+		}
 
 		/*histograms[Math.floor((index % width) / histogramSize)][value]++;
 		let negaIndex = index - histogramSize*width;
