@@ -623,39 +623,43 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 
 		let localChances = [];
+		let sumChances = 0;
 		for(let i=0;i<chances.length;i++){
 			if(i >= lowest && i <= highest){
-				localChances.push(
-					Math.round(
-						Math.pow(chances[i],0.9)
-						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
-						//* Math.cbrt(histogram_e[i + predi - range + 1])
-						* Math.cbrt(histograms[pref_histogram[index % width]].histogram[i + predi - range + 1])
-						* (hasCrossPrediction ? Math.sqrt(
-							origMap[
-								Math.floor((index % width) / crossPredictionSize)
-							][
-								context_data.luma[index]
-							][
-								i + predi - range + 1
-							]
-						) : 1)
-						* (hasCrossPredictionColour ? Math.sqrt(
-							origMapColour[
-								Math.floor((index % width) / crossPredictionSize)
-							][
-								context_data.chroma[index]
-							][
-								i + predi - range + 1
-							]
-						) : 1)
-					)
-				)
+				let chance = Math.pow(chances[i],0.9)
+					* Math.cbrt(histograms[pref_histogram[index % width]].histogram[i + predi - range + 1])
+					* (hasCrossPrediction ? Math.sqrt(
+						origMap[
+							Math.floor((index % width) / crossPredictionSize)
+						][
+							context_data.luma[index]
+						][
+							i + predi - range + 1
+						]
+					) : 1)
+					* (hasCrossPredictionColour ? Math.sqrt(
+						origMapColour[
+							Math.floor((index % width) / crossPredictionSize)
+						][
+							context_data.chroma[index]
+						][
+							i + predi - range + 1
+						]
+					) : 1)
+				localChances.push(chance)
+				sumChances += chance
 			}
 			else{
 				localChances.push(0)
 			}
 		}
+		let scaleFactor = Math.ceil(sumChances/Math.pow(2,24))
+		localChances = localChances.map(vv => {
+			if(vv === 0){
+				return 0
+			}
+			return Math.max(1,Math.round(vv/scaleFactor))
+		})
 		let predicted = dec.read(
 			new FrequencyTable(localChances)
 		)
