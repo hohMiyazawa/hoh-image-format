@@ -400,12 +400,35 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 			console.log("binary bucked data size",frequencyTable.length,"bits");
 		}
 	}
+	if(range === 1){
+		dataBuffer = encodeVarint(dataBuffer.length,BYTE_LENGTH).concat(dataBuffer);
+		while(dataBuffer.length % BYTE_LENGTH){
+			dataBuffer.push(0)
+		}
+		let encodedData = [];
+		while(dataBuffer.length > (BYTE_LENGTH - 1)){
+			encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
+		}
+		return encodedData
+	}
+	else if(range === 2){
+		console.info("bit image mode");
+		dataBuffer = dataBuffer.concat(encode_bitimage(data,width,height));
+		dataBuffer = encodeVarint(dataBuffer.length,BYTE_LENGTH).concat(dataBuffer);
+		while(dataBuffer.length % BYTE_LENGTH){
+			dataBuffer.push(0)
+		}
+		let encodedData = [];
+		while(dataBuffer.length > (BYTE_LENGTH - 1)){
+			encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
+		}
+		return encodedData
+	}
 
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;
 
 	const crossPredictionSize = 128;
-	let crossDebug = new Array(crossPredictionSize*crossPredictionSize).fill(0);
 	if(hasCrossPrediction){
 		origMap = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
 			b => new Array(context_data.lumaRange).fill(0).map(a => 
@@ -969,8 +992,7 @@ catch(e){
 		encodedData.push(dePlex(dataBuffer.splice(0,BYTE_LENGTH)))
 	}
 	//console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
-	console.log("histogram modes",histograms);
-	console.log("crossDebug",crossDebug);
+	//console.log("histogram modes",histograms);
 	console.log(channel_options.name,encodedData.length,"bytes");
 	return encodedData
 }

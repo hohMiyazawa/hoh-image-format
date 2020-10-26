@@ -25,6 +25,7 @@ body{
 		</style>
 		<script src="arith.js"></script>
 		<script src="colourspace.js"></script>
+		<script src="bitimage.js"></script>
 		<script src="lossless_encoder.js"></script>
 		<script src="hoh_lossless.js"></script>
 	</head>
@@ -129,7 +130,8 @@ let options = [
 	{
 		name: "optimisePartitioning",
 		type: "boolean",
-		value: true
+		value: true,
+		visible: true
 	},
 	{
 		name: "minModuleSize",
@@ -204,6 +206,9 @@ let options = [
 
 options.forEach(option => {
 	let param = document.createElement("p");
+	if(!option.visible){
+		param.style.display = "none"
+	}
 	parameters.appendChild(param);
 	if(option.type === "boolean"){
 		let checkbox = document.createElement("input");

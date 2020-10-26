@@ -1,5 +1,3 @@
-const BYTE_LENGTH = 8;
-
 const internal_formats = [
 	"bit","greyscale","greyscalea","rgb","rgba","yiq","yiqa","ycocg","ycocga","indexed","indexeda","verbatim","verbatima","verbatimgreyscale","verbatimbit"
 ]

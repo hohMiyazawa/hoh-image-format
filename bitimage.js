@@ -21,7 +21,7 @@ function encodeVarint(integer,base,derivative){
 
 function encode_bitimage(data,width,height){
 //hist
-	let buffer_hist = [];
+/*	let buffer_hist = [];
 	let writer_hist = {
 		write: function(bit){
 			buffer_hist.push(bit)
@@ -38,11 +38,11 @@ function encode_bitimage(data,width,height){
 	})
 	
 	buffer_hist = encodeVarint(buffer_hist.length).concat(buffer_hist);
-	enc_hist.finish();
+	enc_hist.finish();*/
 //end hist
 
 // 2x2
-	let buffer_block = [];
+/*	let buffer_block = [];
 	let writer_block = {
 		write: function(bit){
 			buffer_block.push(bit)
@@ -81,11 +81,11 @@ function encode_bitimage(data,width,height){
 	}
 	enc_block.finish();
 
-	buffer_block= encodeVarint(buffer_block.length).concat(buffer_block);
+	buffer_block= encodeVarint(buffer_block.length).concat(buffer_block);*/
 // end 2x2
 
 // 2x2 pred
-	let buffer_block2 = [];
+/*	let buffer_block2 = [];
 	let writer_block2 = {
 		write: function(bit){
 			buffer_block2.push(bit)
@@ -120,7 +120,7 @@ function encode_bitimage(data,width,height){
 	enc_block2.finish();
 
 
-	buffer_block= encodeVarint(buffer_block.length).concat(buffer_block);
+	buffer_block= encodeVarint(buffer_block.length).concat(buffer_block);*/
 // end 2x2 pred
 
 //quad
@@ -237,4 +237,107 @@ function encode_bitimage(data,width,height){
 	//console.log("raw",data.length/8);
 
 	return buffer_quad
+}
+
+function decode_bitimage(data,width,height){
+	let decodedData = new Array(width*height).fill(0);
+
+	let buffer_quad = [];
+	let debug_reads = 0;
+	let reader = {
+		read: function(){
+			if(debug_reads <= data.length){
+				return data[debug_reads++]
+			}
+			else{
+				return -1
+			}
+		},
+		close: function(){}
+	}
+	let dec = new ArithmeticDecoder(NUM_OF_BITS, reader);
+
+	let encoding_size = Math.pow(2,Math.ceil(Math.log2(Math.max(width,height))));
+
+	let quad = new Array(16).fill(0).map(_ => new FrequencyTable(new Array(16).fill(1)));
+	let forige_quad = 0;
+
+	let quad_split = new FrequencyTable([1,1]);
+	let quad_whole = new FrequencyTable([1,1]);
+	let quad_whole_black = new FrequencyTable([1,1]);
+	let quad_whole_white = new FrequencyTable([1,1]);
+	let quad_bit_forige = 0;
+
+	let blockQueue = [{x: 0,y:0, size: encoding_size}];
+	while(blockQueue.length){
+		let curr = blockQueue.pop();
+		if(
+			curr.x >= width
+			|| curr.y >= height
+		){
+			continue
+		}
+		if(curr.size === 2){
+			let val = dec.read(quad[forige_quad]);
+			quad[forige_quad].increment(val);
+			forige_quad = val;
+			decodedData[curr.y*width + curr.x] = val >> 3;
+			if(curr.x + 1 < width){
+				decodedData[curr.y*width + curr.x + 1] = (val % 8) >> 2;
+			}
+			if(curr.y + 1 < height){
+				decodedData[(curr.y+1)*width + curr.x] = (val % 4) >> 1;
+			}
+			if(curr.x + 1 < width && curr.y + 1 < height){
+				decodedData[(curr.y+1)*width + curr.x+1] = val % 2;
+			}
+			continue;
+		}
+
+		let splitting = dec.read(quad_split);
+		quad_split.increment(splitting);
+
+		if(splitting === 1){
+			let colour;
+			if(quad_bit_forige === 0){
+				colour = dec.read(quad_whole_black);
+				quad_whole_black.increment(colour);
+			}
+			else{
+				colour = dec.read(quad_whole_white);
+				quad_whole_white.increment(colour);
+			}
+			if(colour){
+				for(let i=0;i<curr.size && curr.x + i < width;i++){
+					for(let j=0;j<curr.size && curr.y + j < height;j++){
+						decodedData[(curr.y + j)*width + i + curr.x] = 1
+					}
+				}
+			}
+			quad_bit_forige = colour;
+		}
+		else{
+			blockQueue.push({
+				x: curr.x,
+				y: curr.y,
+				size: curr.size/2
+			})
+			blockQueue.push({
+				x: curr.x + curr.size/2,
+				y: curr.y,
+				size: curr.size/2
+			})
+			blockQueue.push({
+				x: curr.x + curr.size/2,
+				y: curr.y + curr.size/2,
+				size: curr.size/2
+			})
+			blockQueue.push({
+				x: curr.x,
+				y: curr.y + curr.size/2,
+				size: curr.size/2
+			})
+		}
+	}
+	return decodedData
 }

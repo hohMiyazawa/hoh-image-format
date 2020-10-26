@@ -1,7 +1,6 @@
 importScripts("arith.js");
 importScripts("colourspace.js");
-
-const BYTE_LENGTH = 8;
+importScripts("bitimage.js");
 
 const internal_formats = [
 	"bit","greyscale","greyscalea","rgb","rgba","yiq","yiqa","ycocg","ycocga","indexed","indexeda","verbatim","verbatima","verbatimgreyscale","verbatimbit"
@@ -468,6 +467,31 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		}
 	}
 
+	if(range === 1){
+		if(index_colour){
+			return {
+				data: new Array(width*height).fill(translationTable[0]),
+				isIndex: true
+			}
+		}
+		return new Array(width*height).fill(translationTable[0])
+	}
+	else if(range === 2){
+		let bitData = [];
+		while(debug_reads < channel_options.bitLength){
+			bitData.push(readBit());
+			debug_reads++
+		}
+		let imgData = decode_bitimage(bitData,width,height);
+		if(index_colour){
+			return {
+				data: imgData.map(value => index_colour[value]),
+				isIndex: true
+			}
+		}
+		return imgData.map(a => translationTable[a])
+	}
+
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;
 
@@ -923,7 +947,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 		chances[predicted]++
 	}
 
-	console.log("histogram modes decoded",histograms);
+	//console.log("histogram modes decoded",histograms);
 
 	if(index_colour){
 		return {
