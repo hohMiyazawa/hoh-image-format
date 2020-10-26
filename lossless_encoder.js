@@ -404,7 +404,8 @@ let encodeChannel_lossless = function(data,channel_options,global_options,contex
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;
 
-	const crossPredictionSize = 64;
+	const crossPredictionSize = 128;
+	let crossDebug = new Array(crossPredictionSize*crossPredictionSize).fill(0);
 	if(hasCrossPrediction){
 		origMap = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
 			b => new Array(context_data.lumaRange).fill(0).map(a => 
@@ -596,7 +597,7 @@ try{
 						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
 						//* Math.cbrt(histogram_e[i + predi - range + 1])
 						* Math.cbrt(histograms[pref_histogram[index % width]].histogram[i + predi - range + 1])
-						* (hasCrossPrediction ? Math.cbrt(
+						* (hasCrossPrediction ? Math.sqrt(
 							origMap[
 								Math.floor((index % width) / crossPredictionSize)
 							][
@@ -605,7 +606,7 @@ try{
 								i + predi - range + 1
 							]
 						) : 1)
-						* (hasCrossPredictionColour ? Math.cbrt(
+						* (hasCrossPredictionColour ? Math.sqrt(
 							origMapColour[
 								Math.floor((index % width) / crossPredictionSize)
 							][
@@ -620,6 +621,17 @@ try{
 			else{
 				localChances.push(0)
 			}
+		};
+		if(hasCrossPrediction){
+			crossDebug[
+				origMap[
+					Math.floor((index % width) / crossPredictionSize)
+				][
+					context_data.luma[index]
+				][
+					value
+				]
+			]++
 		}
 		let total = 0;
 		let getLow;
@@ -929,6 +941,7 @@ catch(e){
 	}
 	//console.log("predictors",predictors.map(pre => ({name: pre.name,count: pre.count})));
 	console.log("histogram modes",histograms);
+	console.log("crossDebug",crossDebug);
 	console.log(channel_options.name,encodedData.length,"bytes");
 	return encodedData
 }

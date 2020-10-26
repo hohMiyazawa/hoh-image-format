@@ -471,7 +471,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 	let hasCrossPrediction = global_options.crossPrediction && context_data.luma;
 	let origMap;
 
-	const crossPredictionSize = 64;
+	const crossPredictionSize = 128;
 	if(hasCrossPrediction){
 		origMap = new Array(Math.ceil(width/crossPredictionSize)).fill(0).map(
 			b => new Array(context_data.lumaRange).fill(0).map(a => 
@@ -631,7 +631,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 						//* Math.cbrt(histograms[Math.floor((index % width) / histogramSize)][i + predi - range + 1])
 						//* Math.cbrt(histogram_e[i + predi - range + 1])
 						* Math.cbrt(histograms[pref_histogram[index % width]].histogram[i + predi - range + 1])
-						* (hasCrossPrediction ? Math.cbrt(
+						* (hasCrossPrediction ? Math.sqrt(
 							origMap[
 								Math.floor((index % width) / crossPredictionSize)
 							][
@@ -640,7 +640,7 @@ let decodeChannel_lossless = function(data,channel_options,global_options,contex
 								i + predi - range + 1
 							]
 						) : 1)
-						* (hasCrossPredictionColour ? Math.cbrt(
+						* (hasCrossPredictionColour ? Math.sqrt(
 							origMapColour[
 								Math.floor((index % width) / crossPredictionSize)
 							][
